@@ -132,8 +132,8 @@ typedef struct
 
 // ***********************************************************************
 // Select development system environment here:
-#define DOS 1						// DOS
-#define GCC	0						// UNIX/Linux
+#define DOS 0						// DOS
+#define GCC	1						// UNIX/Linux
 #define MAC	0						// Power PC
 #define NET	0						// .NET
 
