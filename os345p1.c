@@ -48,6 +48,7 @@ extern char inBuffer[];					// character input buffer
 extern Semaphore* inBufferReady;		// input buffer ready semaphore
 extern bool diskMounted;				// disk has been mounted
 extern char dirPath[];					// directory path
+extern int curTask;						// current task
 Command** commands;						// shell commands
 
 
@@ -55,7 +56,35 @@ Command** commands;						// shell commands
 // project 1 prototypes
 Command** P1_init(void);
 Command* newCommand(char*, char*, int (*func)(int, char**), char*);
+void mySIGINTHandler(void);
+void mySIGTSTPHandler(void);
+void mySIGCONTHandler(void);
+void mySIGTERMHandler(void);
 
+int HISTORY_MAX = 200;
+char ** prevArgs;			// pointers to command line history
+void initializeHistory();
+void saveCommandInHistory(char * command);
+int historyIndex;					// index to control history.
+int historyViewer;
+
+
+
+void initializeHistory() {
+	historyIndex = 0;
+	historyViewer = 0;
+	prevArgs = (char**) malloc(sizeof(char*) * HISTORY_MAX);
+	int z;
+	for (z = 0; z < HISTORY_MAX ; z++) {
+		prevArgs[z] = malloc((INBUF_SIZE + 1) * sizeof(char));
+	}
+}
+
+void saveCommandInHistory(char * command) {
+	strcpy(prevArgs[historyIndex],command);
+	historyIndex = historyIndex + 1;
+	historyViewer = historyIndex;
+}
 
 // ***********************************************************************
 // myShell - command line interpreter
@@ -74,9 +103,16 @@ int P1_shellTask(int argc, char* argv[])
 {
 	int i, found, newArgc;					// # of arguments
 	char** newArgv;							// pointers to arguments
+	bool newTask = FALSE;					// bool if & found at end
 
 	// initialize shell commands
 	commands = P1_init();					// init shell commands
+	initializeHistory();					// init history
+
+	sigAction(mySIGINTHandler, mySIGINT);
+	sigAction(mySIGTSTPHandler, mySIGTSTP);
+	sigAction(mySIGCONTHandler, mySIGCONT);
+	sigAction(mySIGTERMHandler, mySIGTERM);
 
 	while (1)
 	{
@@ -85,8 +121,15 @@ int P1_shellTask(int argc, char* argv[])
 		else printf("\n%ld>>", swapCount);
 
 		SEM_WAIT(inBufferReady);			// wait for input buffer semaphore
-		if (!inBuffer[0]) continue;		// ignore blank lines
+		if (!inBuffer[0]) continue;			// ignore blank lines
 		// printf("%s", inBuffer);
+
+		if (inBuffer[0] == 0x06 || inBuffer[0] == 0x04) {
+			printf("control F or D detected!");
+			for (i=0; i<INBUF_SIZE; i++) inBuffer[i] = 0;
+			continue;
+		}
+		saveCommandInHistory(inBuffer);		// save command history
 
 		SWAP										// do context switch
 
@@ -107,31 +150,101 @@ int P1_shellTask(int argc, char* argv[])
 			{
 				*sp++ = 0;
 				myArgv[newArgc++] = sp;
+				if (sp[0]=='"') {
+					char * quoteCopy2 = strchr((sp + 1),'"');
+					if(quoteCopy2 == NULL)		// second quote wasn't found
+						break;
+					sp = quoteCopy2 + 1;
+					*sp++ = 0;
+					myArgv[newArgc++] = sp;
+				}
 			}
-			newArgv = myArgv;
+
+			// check for trailing ampersand
+			if(strchr(myArgv[newArgc-1],'&') != NULL && strlen(strchr(myArgv[newArgc-1],'&')) == 1) {
+				if (strlen(myArgv[newArgc - 1]) != 1) {
+					// remove trailing ampersand if on last arg
+					myArgv[newArgc - 1][strlen(myArgv[newArgc - 1]) - 1] = 0;
+				} else {
+					// remove trailing ampersand if is last arg
+					newArgc = newArgc - 1;
+				}
+				newTask = TRUE;
+			} else
+				newTask = FALSE;
+
+			// malloc argv stuff.
+			newArgv = (char**) malloc(sizeof(char*) * newArgc);
+			int z;
+			for (z = 0; z < newArgc ; z++) {
+				newArgv[z] = malloc((strlen(myArgv[z]) + 1) * sizeof(char));
+				strcpy(newArgv[z], myArgv[z]);
+				// printf("newArgv[%d] = '%s'\n", z, newArgv[z]);
+			}
 		}	// ?? >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 		// look for command
 		for (found = i = 0; i < NUM_COMMANDS; i++)
 		{
-			if (!strcmp(newArgv[0], commands[i]->command) ||
-				 !strcmp(newArgv[0], commands[i]->shortcut))
+			char newArgvInsensitive[sizeof(newArgv[0])/sizeof(char)];
+			strcpy(newArgvInsensitive,newArgv[0]);
+			int j;
+			for(j = 0; newArgvInsensitive[j]; j++){
+				newArgvInsensitive[j] = tolower(newArgvInsensitive[j]);
+			}
+			if (!strcmp(newArgvInsensitive, commands[i]->command) ||
+				 !strcmp(newArgvInsensitive, commands[i]->shortcut))
 			{
 				// command found
-				int retValue = (*commands[i]->func)(newArgc, newArgv);
-				if (retValue) printf("\nCommand Error %d", retValue);
+				if(newTask) {
+					createTask(&(*commands[i]->description),
+							&(*commands[i]->func),
+							MED_PRIORITY,
+							newArgc,
+							newArgv);
+				} else {
+					int retValue = (*commands[i]->func)(newArgc, newArgv);
+					if (retValue) printf("\nCommand Error %d", retValue);
+				}
 				found = TRUE;
 				break;
 			}
 		}
-		if (!found)	printf("\nInvalid command!");
+		if (!found)	printf("\nInvalid command %s.",newArgv[0]);
 
 		// ?? free up any malloc'd argv parameters
+		int z;
+		for (z = 0; z < newArgc ; z++) {
+			free(newArgv[z]);
+		}
+		free(newArgv);
 		for (i=0; i<INBUF_SIZE; i++) inBuffer[i] = 0;
 	}
 	return 0;						// terminate task
 } // end P1_shellTask
 
+
+void mySIGINTHandler(void)
+{
+	sigSignal(-1, mySIGTERM);
+	return;
+}
+
+void mySIGTSTPHandler(void)
+{
+	sigSignal(-1, mySIGSTOP);
+	return;
+}
+
+void mySIGCONTHandler(void)
+{
+	return;
+}
+
+void mySIGTERMHandler(void)
+{
+	killTask(curTask);
+}
 
 // ***********************************************************************
 // ***********************************************************************

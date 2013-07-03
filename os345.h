@@ -104,11 +104,11 @@ typedef struct							// task control block
 	int argc;							// task argument count (project 1)
 	char** argv;						// task argument pointers (project 1)
 	int signal;							// task signals (project 1)
-//	void (*sigContHandler)(void);	// task mySIGCONT handler
+	void (*sigContHandler)(void);	// task mySIGCONT handler
 	void (*sigIntHandler)(void);	// task mySIGINT handler
 //	void (*sigKillHandler)(void);	// task mySIGKILL handler
-//	void (*sigTermHandler)(void);	// task mySIGTERM handler
-//	void (*sigTstpHandler)(void);	// task mySIGTSTP handler
+	void (*sigTermHandler)(void);	// task mySIGTERM handler
+	void (*sigTstpHandler)(void);	// task mySIGTSTP handler
 	TID parent;							// task parent
 	int RPT;								// task root page table (project 5)
 	int cdir;							// task directory (project 6)

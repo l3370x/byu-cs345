@@ -23,6 +23,7 @@
 #include <setjmp.h>
 #include <time.h>
 #include <assert.h>
+#include <unistd.h>
 
 #include "os345.h"
 #include "os345lc3.h"
@@ -169,6 +170,7 @@ int main(int argc, char* argv[])
 
 		// dispatch curTask, quit OS if negative return
 		if (dispatcher(curTask) < 0) break;
+
 	}											// end of scheduling loop
 
 	// exit os
@@ -198,13 +200,54 @@ static void keyboard_isr()
 				semSignal(inBufferReady);	// SIGNAL(inBufferReady)
 				break;
 			}
-
+			case 0x06:						// ^F
+			case 0x04:						// ^D
+			{
+				inBuffer[inBufIndx++] = inChar;
+				inBuffer[inBufIndx] = 0;
+				inBufIndx = 0;
+				semSignal(inBufferReady);
+				break;
+			}
+			case 0x12:						// ^R
+			{
+				inBufIndx = 0;
+				inBuffer[0] = 0;
+				sigSignal(-1, mySIGCONT);	// send mySIGCONT to all tasks
+				int taskId;
+				for (taskId=0; taskId<MAX_TASKS; taskId++)
+				{
+					if (tcb[taskId].signal & mySIGTSTP)
+						tcb[taskId].signal &= ~mySIGTSTP;
+					if (tcb[taskId].signal & mySIGSTOP)
+						tcb[taskId].signal &= ~mySIGSTOP;
+				}
+				break;
+			}
+			case 0x17:						// ^w
+			{
+				inBufIndx = 0;
+				inBuffer[0] = 0;
+				sigSignal(-1, mySIGTSTP);	// send mySIGTSTP to all tasks
+				break;
+			}
 			case 0x18:						// ^x
 			{
 				inBufIndx = 0;
 				inBuffer[0] = 0;
 				sigSignal(0, mySIGINT);		// interrupt task 0
-				semSignal(inBufferReady);	// SEM_SIGNAL(inBufferReady)
+				break;
+			}
+
+			case 0x08:
+			case 0x7f:
+			{
+				if(inBufIndx > 0)
+				{
+					inBufIndx--;
+					inBuffer[inBufIndx] = 0;
+					printf("\b \b");
+				}
 				break;
 			}
 
@@ -383,6 +426,21 @@ static int dispatcher(int curTask)
 					tcb[curTask].signal &= ~mySIGINT;
 					(*tcb[curTask].sigIntHandler)();
 				}
+				if (tcb[curTask].signal & mySIGCONT)
+				{
+					tcb[curTask].signal &= ~mySIGCONT;
+					(*tcb[curTask].sigContHandler)();
+				}
+				if (tcb[curTask].signal & mySIGTERM)
+				{
+					tcb[curTask].signal &= ~mySIGTERM;
+					(*tcb[curTask].sigTermHandler)();
+				}
+				if (tcb[curTask].signal & mySIGTSTP)
+				{
+					tcb[curTask].signal &= ~mySIGTSTP;
+					(*tcb[curTask].sigTstpHandler)();
+				}
 			}
 
 			longjmp(tcb[curTask].context, 3); 		// restore task context
@@ -550,6 +608,21 @@ int sigAction(void (*sigHandler)(void), int sig)
 			tcb[curTask].sigIntHandler = sigHandler;		// mySIGINT handler
 			return 0;
 		}
+		case mySIGTERM:
+		{
+			tcb[curTask].sigTermHandler = sigHandler;		// mySIGTERM handler
+			return 0;
+		}
+		case mySIGTSTP:
+		{
+			tcb[curTask].sigTstpHandler = sigHandler;		// mySIGSTP handler
+			return 0;
+		}
+		case mySIGCONT:
+		{
+			tcb[curTask].sigContHandler = sigHandler;		// mySIGCONT handler
+			return 0;
+		}
 	}
 	return 1;
 }
@@ -591,6 +664,21 @@ void defaultSigIntHandler(void)			// task mySIGINT handler
 	printf("\ndefaultSigIntHandler");
 	return;
 }
+void defaultSigTstpHandler(void)			// task mySIGTSTP handler
+{
+	printf("\ndefaultSigTstpHandler");
+	return;
+}
+void defaultSigContHandler(void)			// task mySIGCont handler
+{
+	printf("\ndefaultSigContHandler");
+	return;
+}
+void defaultSigTermHandler(void)			// task mySIGTerm handler
+{
+	printf("\ndefaultSigTermHandler");
+	return;
+}
 
 
 // **********************************************************************
@@ -629,7 +717,12 @@ int createTask(char* name,						// task name
 			tcb[tid].argc = argc;			// argument count
 
 			// ?? malloc new argv parameters
-			tcb[tid].argv = argv;			// argument pointers
+			char **newArgv = malloc(sizeof(char*)*argc);
+			int z;
+			for (z = 0; z < argc ; z++) {
+				newArgv[z] = argv[z];
+			}
+			tcb[tid].argv = newArgv;			// argument pointers
 
 			tcb[tid].event = 0;				// suspend semaphore
 			tcb[tid].RPT = 0;					// root page table (project 5)
@@ -640,12 +733,18 @@ int createTask(char* name,						// task name
 			if (tid)
 			{
 				// inherit parent signal handlers
-				tcb[tid].sigIntHandler = tcb[curTask].sigIntHandler;			// mySIGINT handler
+				tcb[tid].sigIntHandler = tcb[curTask].sigIntHandler;	// mySIGINT handler
+				tcb[tid].sigTstpHandler = tcb[curTask].sigTstpHandler;	// mySIGTSTP handler
+				tcb[tid].sigContHandler = tcb[curTask].sigContHandler;	// mySIGCONT handler
+				tcb[tid].sigTermHandler = tcb[curTask].sigTermHandler;	// mySIGTERM handler
 			}
 			else
 			{
 				// otherwise use defaults
 				tcb[tid].sigIntHandler = defaultSigIntHandler;			// task mySIGINT handler
+				tcb[tid].sigTstpHandler = defaultSigTstpHandler;		// task mySIGTSTP handler
+				tcb[tid].sigContHandler = defaultSigContHandler;		// task mySIGCONT handler
+				tcb[tid].sigTermHandler = defaultSigTermHandler;		// task mySIGTERM handler
 			}
 
 			// Each task must have its own stack and stack pointer.
@@ -702,7 +801,8 @@ static void exitTask(int taskId)
 	// 2. if blocked, unblock (handle semaphore)
 	// 3. set state to exit
 
-	// ?? add code here...
+	// free memory
+	free(tcb[taskId].argv);
 	tcb[taskId].state = S_EXIT;			// EXIT task state
 
 	return;
@@ -720,7 +820,7 @@ static int sysKillTask(int taskId)
 
 	// assert that you are not pulling the rug out from under yourself!
 	assert("sysKillTask Error" && tcb[taskId].name && superMode);
-	printf("\nKill Task %s", tcb[taskId].name);
+	// printf("\nKill Task %s", tcb[taskId].name);
 
 	// signal task terminated
 	semSignal(taskSems[taskId]);
