@@ -47,10 +47,10 @@ obj/os345park.d
 
 
 # Each subdirectory must supply rules for building sources it contributes
-%.o: %.c
+obj/%.o: %.c
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C Compiler'
-	gcc -O0 -g3 -Wall -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "obj/$@" "$<"
+	gcc -O0 -g3 -Wall -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
@@ -70,13 +70,13 @@ all: 345_2
 345_2: $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: GCC C Linker'
-	gcc  -o "345_2" $(OBJS) $(USER_OBJS) $(LIBS)
+	gcc  -o "bin/345_2" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 
 # Other Targets
 clean:
-	-$(RM) $(OBJS)$(C_DEPS)$(EXECUTABLES) 345_2
+	-$(RM) $(OBJS)$(C_DEPS)$(EXECUTABLES) bin/345_2
 	-@echo ' '
 
 .PHONY: all clean dependents
