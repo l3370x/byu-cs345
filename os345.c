@@ -25,6 +25,8 @@
 #include <assert.h>
 #include <unistd.h>
 
+#include <sys/ioctl.h>
+
 #include "os345.h"
 #include "os345lc3.h"
 #include "os345fat.h"
@@ -82,6 +84,50 @@ time_t oldTime1;					// old 1sec time
 clock_t myClkTime;
 clock_t myOldClkTime;
 int* rq;							// ready priority queue
+
+int HISTORY_MAX = 200;
+char ** prevArgs;			// pointers to command line history
+void initializeHistory();
+void saveCommandInHistory(char * command);
+int historyIndex;					// index to control history.
+int historyViewer;
+char blankBuffer[INBUF_SIZE + 1];
+struct winsize w;
+
+void initializeHistory() {
+	historyIndex = 0;
+	historyViewer = 0;
+	prevArgs = (char**) malloc(sizeof(char*) * HISTORY_MAX);
+	int z;
+	for (z = 0; z < HISTORY_MAX ; z++) {
+		prevArgs[z] = malloc((INBUF_SIZE + 1) * sizeof(char));
+	}
+	for (z=0; z<INBUF_SIZE; z++) blankBuffer[z] = 0;
+}
+
+void freeHistory() {
+	int z;
+	for (z = 0; z < HISTORY_MAX ; z++) {
+		free(prevArgs[z]);
+	}
+	free(prevArgs);
+}
+
+void saveCommandInHistory(char * command) {
+	if(historyIndex >= HISTORY_MAX) {		// shift history back one to replace old entries.
+		int j;
+		for ( j = 0 ; j < HISTORY_MAX ; j++) {
+			int i;
+			for (i=0; i<INBUF_SIZE; i++) prevArgs[j][i] = 0;
+			if(j != (HISTORY_MAX - 1))
+				strcpy(prevArgs[j],prevArgs[j+1]);
+		}
+		historyIndex = historyIndex - 1;
+	}
+	strcpy(prevArgs[historyIndex],command);
+	historyIndex = historyIndex + 1;
+	historyViewer = historyIndex;
+}
 
 
 // **********************************************************************
@@ -203,10 +249,39 @@ static void keyboard_isr()
 			case 0x06:						// ^F
 			case 0x04:						// ^D
 			{
-				inBuffer[inBufIndx++] = inChar;
-				inBuffer[inBufIndx] = 0;
-				inBufIndx = 0;
-				semSignal(inBufferReady);
+				char * toShow = malloc(sizeof(char) * INBUF_SIZE);
+				int i;
+				if (inChar == 0x04) {
+					if(historyViewer <= 0 ) {						// history empty
+						for (i=0; i<INBUF_SIZE; i++) toShow[i] = 0;		// clear toShow
+						free(toShow);
+						break;
+					}
+					strcpy(toShow,prevArgs[historyViewer - 1]);	// copy one back
+					historyViewer = historyViewer - 1;
+					if (historyViewer <= 0) {
+						historyViewer = 0;						// assert cant push index
+					}											// out of bounds (below 0)
+				} else {
+					if(historyViewer >= historyIndex - 1) {			// assert cant go into future history
+						for (i=0; i<INBUF_SIZE; i++) toShow[i] = 0;		// clear toShow
+						free(toShow);
+						break;
+					}
+					strcpy(toShow,prevArgs[historyViewer + 1]);		// copy one forward
+					historyViewer = historyViewer + 1;
+				}
+				int oldLen = strlen(inBuffer);
+				for (i=0; i<INBUF_SIZE; i++) inBuffer[i] = 0;	// clear inBuffer
+				strcpy(inBuffer,toShow);						// set inBuffer
+				inBufIndx = strlen(inBuffer) - 1;				// set inBufIndx
+				for (i=0; i<=oldLen + 2; i++) blankBuffer[i] = ' '; // hide old buffer with spaces.
+				printf("\r%s",blankBuffer);						// clear stdout
+				printf("\r%ld>>%s",swapCount - 1,toShow);		// print history
+				for (i=0; i<INBUF_SIZE; i++) toShow[i] = 0;		// clear toShow
+				for (i=0; i<strlen(inBuffer); i++) blankBuffer[i] = 0;
+				free(toShow);
+
 				break;
 			}
 			case 0x12:						// ^R
