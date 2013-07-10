@@ -94,6 +94,13 @@ int historyViewer;
 char blankBuffer[INBUF_SIZE + 1];
 struct winsize w;
 
+
+// Project 2 global variables
+int ** readyQueue;
+int * blockedQueue;
+int tick;
+
+
 void initializeHistory() {
 	historyIndex = 0;
 	historyViewer = 0;
@@ -156,22 +163,22 @@ int main(int argc, char* argv[])
 
 	switch (resetCode)
 	{
-		case POWER_DOWN_QUIT:				// quit
-			powerDown(0);
-			printf("\nGoodbye!!");
-			return 0;
+	case POWER_DOWN_QUIT:				// quit
+		powerDown(0);
+		printf("\nGoodbye!!");
+		return 0;
 
-		case POWER_DOWN_RESTART:			// restart
-			powerDown(resetCode);
-			printf("\nRestarting system...\n");
+	case POWER_DOWN_RESTART:			// restart
+		powerDown(resetCode);
+		printf("\nRestarting system...\n");
 
-		case POWER_UP:						// startup
-			break;
+	case POWER_UP:						// startup
+		break;
 
-		default:
-			printf("\nShutting down due to error %d", resetCode);
-			powerDown(resetCode);
-			return 0;
+	default:
+		printf("\nShutting down due to error %d", resetCode);
+		powerDown(resetCode);
+		return 0;
 	}
 
 	// output header message
@@ -193,10 +200,10 @@ int main(int argc, char* argv[])
 
 	// schedule CLI task
 	createTask("myShell",			// task name
-					P1_shellTask,	// task
-					MED_PRIORITY,	// task priority
-					argc,			// task arg count
-					argv);			// task argument pointers
+			P1_shellTask,			// task
+			MED_PRIORITY,			// task priority
+			argc,					// task arg count
+			argv);					// task argument pointers
 
 	// HERE WE GO................
 
@@ -239,99 +246,99 @@ static void keyboard_isr()
 	{
 		switch (inChar)
 		{
-			case '\r':
-			case '\n':
-			{
-				inBufIndx = 0;				// EOL, signal line ready
-				semSignal(inBufferReady);	// SIGNAL(inBufferReady)
-				break;
-			}
-			case 0x06:						// ^F
-			case 0x04:						// ^D
-			{
-				char * toShow = malloc(sizeof(char) * INBUF_SIZE);
-				int i;
-				if (inChar == 0x04) {
-					if(historyViewer <= 0 ) {						// history empty
-						for (i=0; i<INBUF_SIZE; i++) toShow[i] = 0;		// clear toShow
-						free(toShow);
-						break;
-					}
-					strcpy(toShow,prevArgs[historyViewer - 1]);	// copy one back
-					historyViewer = historyViewer - 1;
-					if (historyViewer <= 0) {
-						historyViewer = 0;						// assert cant push index
-					}											// out of bounds (below 0)
-				} else {
-					if(historyViewer >= historyIndex - 1) {			// assert cant go into future history
-						for (i=0; i<INBUF_SIZE; i++) toShow[i] = 0;		// clear toShow
-						free(toShow);
-						break;
-					}
-					strcpy(toShow,prevArgs[historyViewer + 1]);		// copy one forward
-					historyViewer = historyViewer + 1;
+		case '\r':
+		case '\n':
+		{
+			inBufIndx = 0;				// EOL, signal line ready
+			semSignal(inBufferReady);	// SIGNAL(inBufferReady)
+			break;
+		}
+		case 0x06:						// ^F
+		case 0x04:						// ^D
+		{
+			char * toShow = malloc(sizeof(char) * INBUF_SIZE);
+			int i;
+			if (inChar == 0x04) {
+				if(historyViewer <= 0 ) {						// history empty
+					for (i=0; i<INBUF_SIZE; i++) toShow[i] = 0;		// clear toShow
+					free(toShow);
+					break;
 				}
-				int oldLen = strlen(inBuffer);
-				for (i=0; i<INBUF_SIZE; i++) inBuffer[i] = 0;	// clear inBuffer
-				strcpy(inBuffer,toShow);						// set inBuffer
-				inBufIndx = strlen(inBuffer) - 1;				// set inBufIndx
-				for (i=0; i<=oldLen + 2; i++) blankBuffer[i] = ' '; // hide old buffer with spaces.
-				printf("\r%s",blankBuffer);						// clear stdout
-				printf("\r%ld>>%s",swapCount - 1,toShow);		// print history
-				for (i=0; i<INBUF_SIZE; i++) toShow[i] = 0;		// clear toShow
-				for (i=0; i<strlen(inBuffer); i++) blankBuffer[i] = 0;
-				free(toShow);
-
-				break;
-			}
-			case 0x12:						// ^R
-			{
-				inBufIndx = 0;
-				inBuffer[0] = 0;
-				sigSignal(-1, mySIGCONT);	// send mySIGCONT to all tasks
-				int taskId;
-				for (taskId=0; taskId<MAX_TASKS; taskId++)
-				{
-					if (tcb[taskId].signal & mySIGTSTP)
-						tcb[taskId].signal &= ~mySIGTSTP;
-					if (tcb[taskId].signal & mySIGSTOP)
-						tcb[taskId].signal &= ~mySIGSTOP;
+				strcpy(toShow,prevArgs[historyViewer - 1]);	// copy one back
+				historyViewer = historyViewer - 1;
+				if (historyViewer <= 0) {
+					historyViewer = 0;						// assert cant push index
+				}											// out of bounds (below 0)
+			} else {
+				if(historyViewer >= historyIndex - 1) {			// assert cant go into future history
+					for (i=0; i<INBUF_SIZE; i++) toShow[i] = 0;		// clear toShow
+					free(toShow);
+					break;
 				}
-				break;
+				strcpy(toShow,prevArgs[historyViewer + 1]);		// copy one forward
+				historyViewer = historyViewer + 1;
 			}
-			case 0x17:						// ^w
-			{
-				inBufIndx = 0;
-				inBuffer[0] = 0;
-				sigSignal(-1, mySIGTSTP);	// send mySIGTSTP to all tasks
-				break;
-			}
-			case 0x18:						// ^x
-			{
-				inBufIndx = 0;
-				inBuffer[0] = 0;
-				sigSignal(0, mySIGINT);		// interrupt task 0
-				break;
-			}
+			int oldLen = strlen(inBuffer);
+			for (i=0; i<INBUF_SIZE; i++) inBuffer[i] = 0;	// clear inBuffer
+			strcpy(inBuffer,toShow);						// set inBuffer
+			inBufIndx = strlen(inBuffer) - 1;				// set inBufIndx
+			for (i=0; i<=oldLen + 2; i++) blankBuffer[i] = ' '; // hide old buffer with spaces.
+			printf("\r%s",blankBuffer);						// clear stdout
+			printf("\r%ld>>%s",swapCount - 1,toShow);		// print history
+			for (i=0; i<INBUF_SIZE; i++) toShow[i] = 0;		// clear toShow
+			for (i=0; i<strlen(inBuffer); i++) blankBuffer[i] = 0;
+			free(toShow);
 
-			case 0x08:
-			case 0x7f:
+			break;
+		}
+		case 0x12:						// ^R
+		{
+			inBufIndx = 0;
+			inBuffer[0] = 0;
+			sigSignal(-1, mySIGCONT);	// send mySIGCONT to all tasks
+			int taskId;
+			for (taskId=0; taskId<MAX_TASKS; taskId++)
 			{
-				if(inBufIndx > 0)
-				{
-					inBufIndx--;
-					inBuffer[inBufIndx] = 0;
-					printf("\b \b");
-				}
-				break;
+				if (tcb[taskId].signal & mySIGTSTP)
+					tcb[taskId].signal &= ~mySIGTSTP;
+				if (tcb[taskId].signal & mySIGSTOP)
+					tcb[taskId].signal &= ~mySIGSTOP;
 			}
+			break;
+		}
+		case 0x17:						// ^w
+		{
+			inBufIndx = 0;
+			inBuffer[0] = 0;
+			sigSignal(-1, mySIGTSTP);	// send mySIGTSTP to all tasks
+			break;
+		}
+		case 0x18:						// ^x
+		{
+			inBufIndx = 0;
+			inBuffer[0] = 0;
+			sigSignal(0, mySIGINT);		// interrupt task 0
+			break;
+		}
 
-			default:
+		case 0x08:
+		case 0x7f:
+		{
+			if(inBufIndx > 0)
 			{
-				inBuffer[inBufIndx++] = inChar;
+				inBufIndx--;
 				inBuffer[inBufIndx] = 0;
-				printf("%c", inChar);		// echo character
+				printf("\b \b");
 			}
+			break;
+		}
+
+		default:
+		{
+			inBuffer[inBufIndx++] = inChar;
+			inBuffer[inBufIndx] = 0;
+			printf("%c", inChar);		// echo character
+		}
 		}
 	}
 	else
@@ -355,15 +362,15 @@ static void timer_isr()
 	assert("timer_isr Error" && superMode);
 
 	// capture current time
-  	time(&currentTime);
+	time(&currentTime);
 
-  	// one second timer
-  	if ((currentTime - oldTime1) >= 1)
-  	{
+	// one second timer
+	if ((currentTime - oldTime1) >= 1)
+	{
 		// signal 1 second
-  	   semSignal(tics1sec);
+		semSignal(tics1sec);
 		oldTime1 += 1;
-  	}
+	}
 
 	// sample fine clock
 	myClkTime = clock();
@@ -393,7 +400,7 @@ static void pollInterrupts(void)
 	// check for keyboard interrupt
 	if ((inChar = GET_CHAR) > 0)
 	{
-	  keyboard_isr();
+		keyboard_isr();
 	}
 
 	// timer interrupt
@@ -410,7 +417,7 @@ static void pollInterrupts(void)
 //
 static int scheduler()
 {
-	int nextTask;
+	int nextTask = 0;
 	// ?? Design and implement a scheduler that will select the next highest
 	// ?? priority ready task to pass to the system dispatcher.
 
@@ -425,14 +432,40 @@ static int scheduler()
 	// ?? you thinking about scheduling.  You must implement code to handle
 	// ?? priorities, clean up dead tasks, and handle semaphores appropriately.
 
+	int pri,tsk;
+	tick = 0;	// set tick to 0 to not print debug info
+	bool taskFound = FALSE;
+	for ( pri = MAX_PRIORITY ; pri >= 0 ; pri--) { // start at highest priority
+		if(taskFound) break;
+		for ( tsk = 0 ; tsk <= MAX_TASKS ; tsk++) { // do FIFO
+			if((readyQueue[pri][tsk]) == -1) {
+				// no task
+			} else {
+				// for debug, print next task
+				if(tick) {
+					printf("\nTask %d at priority %d is scheduled.",readyQueue[pri][tsk],pri,tsk);
+				}
+				nextTask = readyQueue[pri][tsk];	// set next task
+				int back;							// shift queue to enable fifo
+				for ( back = tsk; back <= MAX_TASKS ; back++) {
+					readyQueue[pri][back] = readyQueue[pri][back+1];
+					if(readyQueue[pri][back] == -1){
+						readyQueue[pri][back] = nextTask;
+						break;
+					}
+				}
+				taskFound = TRUE;
+				break;
+			}
+		}
+	}
+
 	// schedule next task
-	nextTask = ++curTask;
+	// nextTask = ++curTask;
 
 	// mask sure nextTask is valid
-	while (!tcb[nextTask].name)
-	{
-		if (++nextTask >= MAX_TASKS) nextTask = 0;
-	}
+	if(!tcb[nextTask].name) return -1;
+
 	if (tcb[nextTask].signal & mySIGSTOP) return -1;
 
 	return nextTask;
@@ -451,95 +484,95 @@ static int dispatcher(int curTask)
 	// schedule task
 	switch(tcb[curTask].state)
 	{
-		case S_NEW:
-		{
-			// new task
-			printf("\nNew Task[%d] %s", curTask, tcb[curTask].name);
-			tcb[curTask].state = S_RUNNING;	// set task to run state
+	case S_NEW:
+	{
+		// new task
+		printf("\nNew Task[%d] %s", curTask, tcb[curTask].name);
+		tcb[curTask].state = S_RUNNING;	// set task to run state
 
-			// save kernel context for task SWAP's
-			if (setjmp(k_context))
+		// save kernel context for task SWAP's
+		if (setjmp(k_context))
+		{
+			superMode = TRUE;					// supervisor mode
+			break;								// context switch to next task
+		}
+
+		// move to new task stack (leave room for return value/address)
+		temp = (int*)tcb[curTask].stack + (STACK_SIZE-8);
+		SET_STACK(temp);
+		superMode = FALSE;						// user mode
+
+		// begin execution of new task, pass argc, argv
+		result = (*tcb[curTask].task)(tcb[curTask].argc, tcb[curTask].argv);
+
+		// task has completed
+		if (result) printf("\nTask[%d] returned %d", curTask, result);
+		else printf("\nTask[%d] returned %d", curTask, result);
+		tcb[curTask].state = S_EXIT;			// set task to exit state
+
+		// return to kernal mode
+		longjmp(k_context, 1);					// return to kernel
+	}
+
+	case S_READY:
+	{
+		tcb[curTask].state = S_RUNNING;			// set task to run
+	}
+
+	case S_RUNNING:
+	{
+		if (setjmp(k_context))
+		{
+			// SWAP executed in task
+			superMode = TRUE;					// supervisor mode
+			break;								// return from task
+		}
+		if (tcb[curTask].signal)
+		{
+			if (tcb[curTask].signal & mySIGINT)
 			{
-				superMode = TRUE;					// supervisor mode
-				break;								// context switch to next task
+				tcb[curTask].signal &= ~mySIGINT;
+				(*tcb[curTask].sigIntHandler)();
 			}
-
-			// move to new task stack (leave room for return value/address)
-			temp = (int*)tcb[curTask].stack + (STACK_SIZE-8);
-			SET_STACK(temp);
-			superMode = FALSE;						// user mode
-
-			// begin execution of new task, pass argc, argv
-			result = (*tcb[curTask].task)(tcb[curTask].argc, tcb[curTask].argv);
-
-			// task has completed
-			if (result) printf("\nTask[%d] returned %d", curTask, result);
-			else printf("\nTask[%d] returned %d", curTask, result);
-			tcb[curTask].state = S_EXIT;			// set task to exit state
-
-			// return to kernal mode
-			longjmp(k_context, 1);					// return to kernel
-		}
-
-		case S_READY:
-		{
-			tcb[curTask].state = S_RUNNING;			// set task to run
-		}
-
-		case S_RUNNING:
-		{
-			if (setjmp(k_context))
+			if (tcb[curTask].signal & mySIGCONT)
 			{
-				// SWAP executed in task
-				superMode = TRUE;					// supervisor mode
-				break;								// return from task
+				tcb[curTask].signal &= ~mySIGCONT;
+				(*tcb[curTask].sigContHandler)();
 			}
-			if (tcb[curTask].signal)
+			if (tcb[curTask].signal & mySIGTERM)
 			{
-				if (tcb[curTask].signal & mySIGINT)
-				{
-					tcb[curTask].signal &= ~mySIGINT;
-					(*tcb[curTask].sigIntHandler)();
-				}
-				if (tcb[curTask].signal & mySIGCONT)
-				{
-					tcb[curTask].signal &= ~mySIGCONT;
-					(*tcb[curTask].sigContHandler)();
-				}
-				if (tcb[curTask].signal & mySIGTERM)
-				{
-					tcb[curTask].signal &= ~mySIGTERM;
-					(*tcb[curTask].sigTermHandler)();
-				}
-				if (tcb[curTask].signal & mySIGTSTP)
-				{
-					tcb[curTask].signal &= ~mySIGTSTP;
-					(*tcb[curTask].sigTstpHandler)();
-				}
+				tcb[curTask].signal &= ~mySIGTERM;
+				(*tcb[curTask].sigTermHandler)();
 			}
-
-			longjmp(tcb[curTask].context, 3); 		// restore task context
+			if (tcb[curTask].signal & mySIGTSTP)
+			{
+				tcb[curTask].signal &= ~mySIGTSTP;
+				(*tcb[curTask].sigTstpHandler)();
+			}
 		}
 
-		case S_BLOCKED:
-		{
-			// ?? Could check here to unblock task
-			break;
-		}
+		longjmp(tcb[curTask].context, 3); 		// restore task context
+	}
 
-		case S_EXIT:
-		{
-			if (curTask == 0) return -1;			// if CLI, then quit scheduler
-			// release resources and kill task
-			sysKillTask(curTask);					// kill current task
-			break;
-		}
+	case S_BLOCKED:
+	{
+		// ?? Could check here to unblock task
+		break;
+	}
 
-		default:
-		{
-			printf("Unknown Task[%d] State", curTask);
-			longjmp(reset_context, POWER_DOWN_ERROR);
-		}
+	case S_EXIT:
+	{
+		if (curTask == 0) return -1;			// if CLI, then quit scheduler
+		// release resources and kill task
+		sysKillTask(curTask);					// kill current task
+		break;
+	}
+
+	default:
+	{
+		printf("Unknown Task[%d] State", curTask);
+		longjmp(reset_context, POWER_DOWN_ERROR);
+	}
 	}
 	return 0;
 } // end dispatcher
@@ -608,7 +641,7 @@ static void initOS()
 
 	// capture current time
 	lastPollClock = clock();			// last pollClock
-   time(&oldTime1);
+	time(&oldTime1);
 
 	// init system tcb's
 	for (i=0; i<MAX_TASKS; i++)
@@ -633,6 +666,24 @@ static void initOS()
 	initLC3Memory(LC3_MEM_FRAME, 0xF800>>6);
 
 	// ?? initialize all execution queues
+	int i2, j;
+
+	// initialize ready queue an int[MAX_PRIORITY][MAX_TASKS]
+	readyQueue = malloc((MAX_PRIORITY+1) * sizeof(int*));
+	for(i2=0; i2<=MAX_PRIORITY; i2++) {
+		readyQueue[i2] = malloc((MAX_TASKS+1) * sizeof(int));
+		for(j=0; j<=MAX_TASKS; j++) {
+			readyQueue[i2][j] = -1;
+		}
+	}
+	tick = 300000;
+
+	// initialize blocked queue an int[MAX_TASKS]
+	blockedQueue = malloc((MAX_TASKS+1)*sizeof(int));
+	for (i2 = 0 ; i2<=MAX_TASKS ; i2++) {
+		blockedQueue[i2] = -1;
+	}
+
 
 	return;
 } // end initOS
@@ -662,6 +713,15 @@ void powerDown(int code)
 	free(rq);
 
 	// ?? release any other system resources
+	int i2;
+	// free ready queue an int[MAX_PRIORITY][MAX_TASKS]
+
+	for(i2=0; i2<MAX_PRIORITY; i2++) {
+		// readyQueue[i2] = malloc(MAX_TASKS * sizeof(int));
+		free(readyQueue[i2]);
+	}
+	//readyQueue = malloc(MAX_PRIORITY * sizeof(int*));
+	free(readyQueue);
 	// ?? deltaclock (project 3)
 
 	RESTORE_OS
@@ -678,26 +738,26 @@ int sigAction(void (*sigHandler)(void), int sig)
 {
 	switch (sig)
 	{
-		case mySIGINT:
-		{
-			tcb[curTask].sigIntHandler = sigHandler;		// mySIGINT handler
-			return 0;
-		}
-		case mySIGTERM:
-		{
-			tcb[curTask].sigTermHandler = sigHandler;		// mySIGTERM handler
-			return 0;
-		}
-		case mySIGTSTP:
-		{
-			tcb[curTask].sigTstpHandler = sigHandler;		// mySIGSTP handler
-			return 0;
-		}
-		case mySIGCONT:
-		{
-			tcb[curTask].sigContHandler = sigHandler;		// mySIGCONT handler
-			return 0;
-		}
+	case mySIGINT:
+	{
+		tcb[curTask].sigIntHandler = sigHandler;		// mySIGINT handler
+		return 0;
+	}
+	case mySIGTERM:
+	{
+		tcb[curTask].sigTermHandler = sigHandler;		// mySIGTERM handler
+		return 0;
+	}
+	case mySIGTSTP:
+	{
+		tcb[curTask].sigTstpHandler = sigHandler;		// mySIGSTP handler
+		return 0;
+	}
+	case mySIGCONT:
+	{
+		tcb[curTask].sigContHandler = sigHandler;		// mySIGCONT handler
+		return 0;
+	}
 	}
 	return 1;
 }
@@ -760,10 +820,10 @@ void defaultSigTermHandler(void)			// task mySIGTerm handler
 // **********************************************************************
 // create task
 int createTask(char* name,						// task name
-					int (*task)(int, char**),	// task address
-					int priority,				// task priority
-					int argc,					// task argument count
-					char* argv[])				// task argument pointers
+		int (*task)(int, char**),	// task address
+		int priority,				// task priority
+		int argc,					// task argument count
+		char* argv[])				// task argument pointers
 {
 	int tid;
 
@@ -826,6 +886,11 @@ int createTask(char* name,						// task name
 			tcb[tid].stack = malloc(STACK_SIZE * sizeof(int));
 
 			// ?? may require inserting task into "ready" queue
+			int q = 0;
+			while(readyQueue[priority][q++] != -1) {}
+			q = q-1;
+			readyQueue[priority][q] = tid;
+			// printf("\nentered task id %d into slot [%d][%d]",tid,priority,q);
 
 			if (tid) swapTask();				// do context switch (if not cli)
 			return tid;							// return tcb index (curTask)
@@ -942,16 +1007,29 @@ void semSignal(Semaphore* s)
 		// binary semaphore
 		// look through tasks for one suspended on this semaphore
 
-temp:	// ?? temporary label
+		temp:	// non temporary label
 		for (i=0; i<MAX_TASKS; i++)	// look for suspended task
 		{
 			if (tcb[i].event == s)
 			{
 				s->state = 0;				// clear semaphore
 				tcb[i].event = 0;			// clear event pointer
-				tcb[i].state = S_READY;	// unblock task
+				tcb[i].state = S_READY;		// unblock task
 
-				// ?? move task from blocked to ready queue
+				// move task from blocked to ready queue
+				int j;
+				int taskToMove;
+				for ( j = 0 ; j < MAX_TASKS ; j++) {
+					if(blockedQueue[j] == i) {
+						blockedQueue[j] = taskToMove;
+					}
+				}
+				int q = 0;
+				while(readyQueue[tcb[i].priority][q++] != -1) {}
+				q = q-1;
+				readyQueue[tcb[i].priority][q] = i;
+				// printf("\nreentered task id %d into slot [%d][%d] from blockedQueue",i,tcb[i].priority,q);
+
 
 				if (!superMode) swapTask();
 				return;
@@ -965,13 +1043,44 @@ temp:	// ?? temporary label
 	else
 	{
 		// counting semaphore
-		// ?? implement counting semaphore
-
-		goto temp;
+		s->state = s->state + 1;
+		if(s->state == 1) {
+			goto temp; // unblock a task waiting on this counting sem.
+		}
 	}
 } // end semSignal
 
 
+
+void curtaskReadyToBlocked() {
+	// ?? move task from ready queue to blocked queue
+	int pri,tsk;
+	int taskToMove;
+	bool taskFound = FALSE;
+	for ( pri = MAX_PRIORITY ; pri >= 0 ; pri--) { // start at highest priority
+		if(taskFound) break;
+		for ( tsk = 0 ; tsk <= MAX_TASKS ; tsk++) { // do FIFO
+			if((readyQueue[pri][tsk]) == curTask) {
+				taskToMove = readyQueue[pri][tsk];	// set task to move to blocked queue
+				int back;							// shift queue
+				for ( back = tsk; back <= MAX_TASKS ; back++) {
+					readyQueue[pri][back] = readyQueue[pri][back+1];
+					if(readyQueue[pri][back] == -1){
+						break;
+					}
+				}
+				taskFound = TRUE;
+				break;
+			}
+		}
+	}
+	if(taskFound){
+		int j = 0;
+		while(blockedQueue[j++] == -1){};
+		j = j-1;
+		blockedQueue[j]=taskToMove;
+	}
+}
 
 // **********************************************************************
 // **********************************************************************
@@ -982,9 +1091,9 @@ temp:	// ?? temporary label
 //
 int semWait(Semaphore* s)
 {
-	assert("semWait Error" && s);												// assert semaphore
+	assert("semWait Error" && s);									// assert semaphore
 	assert("semWait Error" && ((s->type == 0) || (s->type == 1)));	// assert legal type
-	assert("semWait Error" && !superMode);								// assert user mode
+	assert("semWait Error" && !superMode);							// assert user mode
 
 	// check semaphore type
 	if (s->type == 0)
@@ -992,13 +1101,13 @@ int semWait(Semaphore* s)
 		// binary semaphore
 		// if state is zero, then block task
 
-temp:	// ?? temporary label
 		if (s->state == 0)
 		{
 			tcb[curTask].event = s;		// block task
 			tcb[curTask].state = S_BLOCKED;
 
-			// ?? move task from ready queue to blocked queue
+			// Move task from ready to blocked queue
+			curtaskReadyToBlocked();
 
 			swapTask();						// reschedule the tasks
 			return 1;
@@ -1010,11 +1119,23 @@ temp:	// ?? temporary label
 	else
 	{
 		// counting semaphore
-		// ?? implement counting semaphore
+		s->state = s->state - 1;
+		if(s->state < 0){
+			s->state = 0;				// set lower limit to 0
+			tcb[curTask].event = s;		// block task
+			tcb[curTask].state = S_BLOCKED;
 
-		goto temp;
+			// Move task from ready to blocked queue
+			curtaskReadyToBlocked();
+
+			swapTask();						// reschedule the tasks
+			return 1;
+		}
+		return 0;	// don't block
 	}
 } // end semWait
+
+
 
 
 
@@ -1037,7 +1158,7 @@ int semTryLock(Semaphore* s)
 		// binary semaphore
 		// if state is zero, then block task
 
-temp:	// ?? temporary label
+		temp:	// ?? temporary label
 		if (s->state == 0)
 		{
 			return 0;

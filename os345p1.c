@@ -171,6 +171,8 @@ int P1_shellTask(int argc, char* argv[])
 				}
 			}
 			SWAP
+			// if blank after clearing whitespace, ignore line
+			if(is_empty(myArgv[0])) continue;
 			// check for trailing ampersand
 			if(strchr(myArgv[newArgc-1],'&') != NULL && strlen(strchr(myArgv[newArgc-1],'&')) == 1) {
 				if (strlen(myArgv[newArgc - 1]) != 1) {

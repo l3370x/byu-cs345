@@ -3,7 +3,7 @@
 #define __os345_h__
 // ***********************************************************************
 //
-#define STARTUP_MSG	"CS345 Su2012"
+#define STARTUP_MSG	"CS345 Su2013"
 
 // ***********************************************************************
 // Context switching directives
@@ -41,6 +41,7 @@
 #define HIGH_PRIORITY		10
 #define VERY_HIGH_PRIORITY	20
 #define HIGHEST_PRIORITY	99
+#define MAX_PRIORITY		100
 
 // Task ID's
 #define SHELL_TID			0
@@ -85,11 +86,11 @@ typedef int bool;						// boolean value
 typedef int TID;						// task id
 
 // semaphore
-typedef struct semaphore			// semaphore
+typedef struct semaphore				// semaphore
 {
-	struct semaphore* semLink;		// semaphore link
+	struct semaphore* semLink;			// semaphore link
 	char* name;							// semaphore name
-	int state;							// semaphore state
+	int state;							// semaphore state (or value)
 	int type;							// semaphore type
 	int taskNum;						// semaphore creator task #
 } Semaphore;
@@ -98,19 +99,19 @@ typedef struct semaphore			// semaphore
 typedef struct							// task control block
 {
 	char* name;							// task name
-	int (*task)(int,char**);		// task address
+	int (*task)(int,char**);			// task address
 	int state;							// task state
 	int priority;						// task priority (project 2)
 	int argc;							// task argument count (project 1)
 	char** argv;						// task argument pointers (project 1)
 	int signal;							// task signals (project 1)
-	void (*sigContHandler)(void);	// task mySIGCONT handler
-	void (*sigIntHandler)(void);	// task mySIGINT handler
-//	void (*sigKillHandler)(void);	// task mySIGKILL handler
-	void (*sigTermHandler)(void);	// task mySIGTERM handler
-	void (*sigTstpHandler)(void);	// task mySIGTSTP handler
+	void (*sigContHandler)(void);		// task mySIGCONT handler
+	void (*sigIntHandler)(void);		// task mySIGINT handler
+//	void (*sigKillHandler)(void);		// task mySIGKILL handler
+	void (*sigTermHandler)(void);		// task mySIGTERM handler
+	void (*sigTstpHandler)(void);		// task mySIGTSTP handler
 	TID parent;							// task parent
-	int RPT;								// task root page table (project 5)
+	int RPT;							// task root page table (project 5)
 	int cdir;							// task directory (project 6)
 	Semaphore *event;					// blocked task semaphore
 	void* stack;						// task stack
@@ -124,9 +125,9 @@ typedef struct							// task control block
 // intertask message
 typedef struct
 {
-	int from;                  // source
-   int to;                    // destination
-   char* msg;						// msg
+	int from;                 			// source
+   int to;                 				// destination
+   char* msg;							// msg
 } Message;
 #define MAX_MESSAGE_SIZE		64
 

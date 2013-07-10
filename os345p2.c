@@ -27,8 +27,8 @@
 
 // ***********************************************************************
 // project 2 variables
-static Semaphore* s1Sem;					// task 1 semaphore
-static Semaphore* s2Sem;					// task 2 semaphore
+static Semaphore* sTask10;					// task 1 semaphore
+static Semaphore* sTask11;					// task 2 semaphore
 
 extern TCB tcb[];								// task control block
 extern int curTask;							// current task #
@@ -46,33 +46,33 @@ int ImAliveTask(int, char**);
 // project2 command
 int P2_project2(int argc, char* argv[])
 {
-	static char* s1Argv[] = {"signal1", "s1Sem"};
-	static char* s2Argv[] = {"signal2", "s2Sem"};
-	static char* aliveArgv[] = {"I'm Alive", "3"};
+	static char* s1Argv[] = {"sTask1", "sTask10"};
+	static char* s2Argv[] = {"sTask2", "sTask11"};
+	static char* aliveArgv[] = {"ImAlive", "3"};
 
 	printf("\nStarting Project 2");
 	SWAP;
 
 	// start tasks looking for sTask semaphores
-	createTask("signal1",				// task name
+	createTask("sTask1",				// task name
 					signalTask,				// task
 					VERY_HIGH_PRIORITY,	// task priority
 					2,							// task argc
 					s1Argv);					// task argument pointers
 
-	createTask("signal2",				// task name
+	createTask("sTask2",				// task name
 					signalTask,				// task
 					VERY_HIGH_PRIORITY,	// task priority
 					2,							// task argc
 					s2Argv);					// task argument pointers
 
-	createTask("I'm Alive",				// task name
+	createTask("ImAlive",				// task name
 					ImAliveTask,			// task
 					LOW_PRIORITY,			// task priority
 					2,							// task argc
 					aliveArgv);				// task argument pointers
 
-	createTask("I'm Alive",				// task name
+	createTask("ImAlive",				// task name
 					ImAliveTask,			// task
 					LOW_PRIORITY,			// task priority
 					2,							// task argc
@@ -221,13 +221,13 @@ void sem_signal(Semaphore* sem)		// signal
 // ***********************************************************************
 int P2_signal1(int argc, char* argv[])		// signal1
 {
-	SEM_SIGNAL(s1Sem);
+	SEM_SIGNAL(sTask10);
 	return 0;
 } // end signal
 
 int P2_signal2(int argc, char* argv[])		// signal2
 {
-	SEM_SIGNAL(s2Sem);
+	SEM_SIGNAL(sTask11);
 	return 0;
 } // end signal
 
@@ -244,7 +244,7 @@ int signalTask(int argc, char* argv[])
 	int count = 0;					// task variable
 
 	// create a semaphore
-	Semaphore** mySem = (!strcmp(argv[1], "s1Sem")) ? &s1Sem : &s2Sem;
+	Semaphore** mySem = (!strcmp(argv[1], "sTask10")) ? &sTask10 : &sTask11;
 	*mySem = createSemaphore(argv[1], 0, 0);
 
 	// loop waiting for semaphore to be signaled
@@ -266,7 +266,7 @@ int ImAliveTask(int argc, char* argv[])
 	int i;							// local task variable
 	while (1)
 	{
-		printf("\n(%d) I'm Alive!", curTask);
+		printf("\n(%d) I'm Alive!\n", curTask);
 		for (i=0; i<100000; i++) swapTask();
 	}
 	return 0;						// terminate task
