@@ -100,6 +100,12 @@ int ** readyQueue;
 int * blockedQueue;
 int tick;
 
+// Project 2 methods
+void taskReadyToBlocked(int t);
+void taskBlockedToReady(int t);
+bool removeFromReadyQueue(int t);
+void removeFromBlockedQueue(int t);
+
 
 void initializeHistory() {
 	historyIndex = 0;
@@ -939,15 +945,18 @@ static void exitTask(int taskId)
 
 	// 1. find task in system queue
 	// 2. if blocked, unblock (handle semaphore)
+	if(tcb[taskId].state == S_BLOCKED){
+		semSignal(tcb[taskId].event);
+	}
 	// 3. set state to exit
 
 	// free memory
 	free(tcb[taskId].argv);
-	tcb[taskId].state = S_EXIT;			// EXIT task state
+
+	tcb[taskId].state = S_EXIT;				// EXIT task state
 
 	return;
 } // end exitTask
-
 
 
 // **********************************************************************
@@ -980,12 +989,64 @@ static int sysKillTask(int taskId)
 		}
 	}
 
-	// ?? delete task from system queues
+	// delete task from system queues
+
+	// delete from ready queue
+	removeFromReadyQueue(taskId);
+
+	// delete from blocked queue
+	removeFromBlockedQueue(taskId);
+
 
 	tcb[taskId].name = 0;			// release tcb slot
 	return 0;
 } // end killTask
 
+void removeFromBlockedQueue(int t) {
+	int j;
+	bool found = FALSE;
+	for ( j = 0 ; j < MAX_TASKS ; j++) {	// remove from blocked queue
+		if(blockedQueue[j] == t || found) {
+			found = TRUE;
+			blockedQueue[j] = blockedQueue[j+1];	// shift queue
+			if(blockedQueue[j] == -1) break;
+		}
+	}
+}
+
+bool removeFromReadyQueue(int t) {
+	int pri,tsk;
+	bool taskFound = FALSE;
+	for ( pri = MAX_PRIORITY ; pri >= 0 ; pri--) { // start at highest priority
+		if(taskFound) break;
+		for ( tsk = 0 ; tsk <= MAX_TASKS ; tsk++) { // do FIFO
+			if((readyQueue[pri][tsk]) == t) {		// found.
+				int back;							// shift queue
+				for ( back = tsk; back <= MAX_TASKS ; back++) {
+					readyQueue[pri][back] = readyQueue[pri][back+1];
+					if(readyQueue[pri][back] == -1){
+						break;
+					}
+				}
+				taskFound = TRUE;
+				break;
+			}
+		}
+	}
+	return taskFound;
+}
+
+
+void taskBlockedToReady(int t) {
+	removeFromBlockedQueue(t);
+	// insert into ready queue
+	int q = 0;
+	while(readyQueue[tcb[t].priority][q++] != -1) {}
+	q = q-1;
+	readyQueue[tcb[t].priority][q] = t;
+	// printf("\nreentered task id %d into slot [%d][%d] from blockedQueue",i,tcb[i].priority,q);
+
+}
 
 
 // **********************************************************************
@@ -1007,7 +1068,6 @@ void semSignal(Semaphore* s)
 		// binary semaphore
 		// look through tasks for one suspended on this semaphore
 
-		temp:	// non temporary label
 		for (i=0; i<MAX_TASKS; i++)	// look for suspended task
 		{
 			if (tcb[i].event == s)
@@ -1017,19 +1077,7 @@ void semSignal(Semaphore* s)
 				tcb[i].state = S_READY;		// unblock task
 
 				// move task from blocked to ready queue
-				int j;
-				int taskToMove;
-				for ( j = 0 ; j < MAX_TASKS ; j++) {
-					if(blockedQueue[j] == i) {
-						blockedQueue[j] = taskToMove;
-					}
-				}
-				int q = 0;
-				while(readyQueue[tcb[i].priority][q++] != -1) {}
-				q = q-1;
-				readyQueue[tcb[i].priority][q] = i;
-				// printf("\nreentered task id %d into slot [%d][%d] from blockedQueue",i,tcb[i].priority,q);
-
+				taskBlockedToReady(i);
 
 				if (!superMode) swapTask();
 				return;
@@ -1045,40 +1093,32 @@ void semSignal(Semaphore* s)
 		// counting semaphore
 		s->state = s->state + 1;
 		if(s->state == 1) {
-			goto temp; // unblock a task waiting on this counting sem.
-		}
-	}
-} // end semSignal
+			// unblock a task waiting on this counting sem.
+			for (i=0; i<MAX_TASKS; i++)	{ // look for suspended task
+				if (tcb[i].event == s) {
+					tcb[i].event = 0;			// clear event pointer
+					tcb[i].state = S_READY;		// unblock task
 
+					// move task from blocked to ready queue
+					taskBlockedToReady(i);
 
-
-void curtaskReadyToBlocked() {
-	// ?? move task from ready queue to blocked queue
-	int pri,tsk;
-	int taskToMove;
-	bool taskFound = FALSE;
-	for ( pri = MAX_PRIORITY ; pri >= 0 ; pri--) { // start at highest priority
-		if(taskFound) break;
-		for ( tsk = 0 ; tsk <= MAX_TASKS ; tsk++) { // do FIFO
-			if((readyQueue[pri][tsk]) == curTask) {
-				taskToMove = readyQueue[pri][tsk];	// set task to move to blocked queue
-				int back;							// shift queue
-				for ( back = tsk; back <= MAX_TASKS ; back++) {
-					readyQueue[pri][back] = readyQueue[pri][back+1];
-					if(readyQueue[pri][back] == -1){
-						break;
-					}
+					if (!superMode) swapTask();
+					return;
 				}
-				taskFound = TRUE;
-				break;
 			}
-		}
+		} // end semSignal
 	}
-	if(taskFound){
+}
+
+
+
+void taskReadyToBlocked(int t) {
+	// ?? move task from ready queue to blocked queue
+	if(removeFromReadyQueue(t)) { // move to blocked queue
 		int j = 0;
-		while(blockedQueue[j++] == -1){};
+		while(blockedQueue[j++] != -1){};	// insert in at end of blocked
 		j = j-1;
-		blockedQueue[j]=taskToMove;
+		blockedQueue[j]=t;
 	}
 }
 
@@ -1107,7 +1147,7 @@ int semWait(Semaphore* s)
 			tcb[curTask].state = S_BLOCKED;
 
 			// Move task from ready to blocked queue
-			curtaskReadyToBlocked();
+			taskReadyToBlocked(curTask);
 
 			swapTask();						// reschedule the tasks
 			return 1;
@@ -1126,7 +1166,7 @@ int semWait(Semaphore* s)
 			tcb[curTask].state = S_BLOCKED;
 
 			// Move task from ready to blocked queue
-			curtaskReadyToBlocked();
+			taskReadyToBlocked(curTask);
 
 			swapTask();						// reschedule the tasks
 			return 1;
@@ -1148,17 +1188,15 @@ int semWait(Semaphore* s)
 //
 int semTryLock(Semaphore* s)
 {
-	assert("semTryLock Error" && s);												// assert semaphore
+	assert("semTryLock Error" && s);									// assert semaphore
 	assert("semTryLock Error" && ((s->type == 0) || (s->type == 1)));	// assert legal type
-	assert("semTryLock Error" && !superMode);									// assert user mode
+	assert("semTryLock Error" && !superMode);							// assert user mode
 
 	// check semaphore type
 	if (s->type == 0)
 	{
 		// binary semaphore
 		// if state is zero, then block task
-
-		temp:	// ?? temporary label
 		if (s->state == 0)
 		{
 			return 0;
@@ -1170,9 +1208,21 @@ int semTryLock(Semaphore* s)
 	else
 	{
 		// counting semaphore
-		// ?? implement counting semaphore
+		// implement counting semaphore
+		s->state = s->state - 1;
+		if(s->state < 0) {					// ?? do you have to block in tryLock?
+			s->state = 0;					// set lower limit to 0
+			// tcb[curTask].event = s;		// block task
+			// tcb[curTask].state = S_BLOCKED;
 
-		goto temp;
+			// Move task from ready to blocked queue
+			// taskReadyToBlocked(curTask);
+
+			swapTask();						// reschedule the tasks
+			return 0;
+		} else {
+			return 1;
+		}
 	}
 } // end semTryLock
 
