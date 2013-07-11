@@ -21,6 +21,7 @@
 #include <ctype.h>
 #include <setjmp.h>
 #include <assert.h>
+#include <time.h>
 #include "os345.h"
 
 #define my_printf	printf
@@ -29,6 +30,10 @@
 // project 2 variables
 static Semaphore* sTask10;					// task 1 semaphore
 static Semaphore* sTask11;					// task 2 semaphore
+
+extern Semaphore* tics10sec;
+extern int* blockedQueue;
+extern int** readyQueue;
 
 extern TCB tcb[];								// task control block
 extern int curTask;							// current task #
@@ -53,34 +58,55 @@ int P2_project2(int argc, char* argv[])
 	printf("\nStarting Project 2");
 	SWAP;
 
+	char *argvTimer[] = { "timeThis"};
+	int i;
+	for (i=0 ; i < 10 ; i++){
+		createTask("timeThis", P2_timeThis, HIGH_PRIORITY, 1, argvTimer);
+	}
 	// start tasks looking for sTask semaphores
 	createTask("sTask1",				// task name
-					signalTask,				// task
-					VERY_HIGH_PRIORITY,	// task priority
-					2,							// task argc
-					s1Argv);					// task argument pointers
+			signalTask,				// task
+			VERY_HIGH_PRIORITY,	// task priority
+			2,							// task argc
+			s1Argv);					// task argument pointers
 
 	createTask("sTask2",				// task name
-					signalTask,				// task
-					VERY_HIGH_PRIORITY,	// task priority
-					2,							// task argc
-					s2Argv);					// task argument pointers
+			signalTask,				// task
+			VERY_HIGH_PRIORITY,	// task priority
+			2,							// task argc
+			s2Argv);					// task argument pointers
 
 	createTask("ImAlive",				// task name
-					ImAliveTask,			// task
-					LOW_PRIORITY,			// task priority
-					2,							// task argc
-					aliveArgv);				// task argument pointers
+			ImAliveTask,			// task
+			LOW_PRIORITY,			// task priority
+			2,							// task argc
+			aliveArgv);				// task argument pointers
 
 	createTask("ImAlive",				// task name
-					ImAliveTask,			// task
-					LOW_PRIORITY,			// task priority
-					2,							// task argc
-					aliveArgv);				// task argument pointers
+			ImAliveTask,			// task
+			LOW_PRIORITY,			// task priority
+			2,							// task argc
+			aliveArgv);				// task argument pointers
+
 	return 0;
 } // end P2_project2
 
-
+int P2_timeThis(int argc, char* argv[]) {
+	while (1) {
+		SWAP
+		SEM_WAIT(tics10sec);
+		SWAP
+		time_t rawtime;
+		struct tm * timeinfo;
+		time ( &rawtime );
+		timeinfo = localtime ( &rawtime );
+		printf("\nThe current time is %sThe current task is %d.\n",asctime(timeinfo),curTask);
+		SWAP
+		SEM_WAIT(tics10sec);
+		SWAP
+	}
+	return 0;
+}
 
 // ***********************************************************************
 // ***********************************************************************
@@ -89,26 +115,61 @@ int P2_listTasks(int argc, char* argv[])
 {
 	int i;
 
-//	?? 1) List all tasks in all queues
-// ?? 2) Show the task stake (new, running, blocked, ready)
-// ?? 3) If blocked, indicate which semaphore
-
+	//	?? 1) List all tasks in all queues
+	// ?? 2) Show the task stake (new, running, blocked, ready)
+	// ?? 3) If blocked, indicate which semaphore
+	/*
 	for (i=0; i<MAX_TASKS; i++)
 	{
 		if (tcb[i].name)
 		{
 			printf("\n%4d/%-4d%20s%4d  ", i, tcb[i].parent,
-		  				tcb[i].name, tcb[i].priority);
+					tcb[i].name, tcb[i].priority);
 			if (tcb[i].signal & mySIGSTOP) my_printf("Paused");
 			else if (tcb[i].state == S_NEW) my_printf("New");
 			else if (tcb[i].state == S_READY) my_printf("Ready");
 			else if (tcb[i].state == S_RUNNING) my_printf("Running");
 			else if (tcb[i].state == S_BLOCKED) my_printf("Blocked    %s",
-		  				tcb[i].event->name);
+					tcb[i].event->name);
 			else if (tcb[i].state == S_EXIT) my_printf("Exiting");
 			swapTask();
 		}
 	}
+	 */
+	int pri,tsk;
+	for ( pri = MAX_PRIORITY ; pri >= 0 ; pri--) { // start at highest priority
+		for ( tsk = 0 ; tsk <= MAX_TASKS ; tsk++) { // do FIFO
+			if(readyQueue[pri][tsk] != -1) {
+				i = readyQueue[pri][tsk];
+				printf("\n%4d/%-4d%20s%4d  ", i, tcb[i].parent,
+						tcb[i].name, tcb[i].priority);
+				if (tcb[i].signal & mySIGSTOP) my_printf("Paused");
+				else if (tcb[i].state == S_NEW) my_printf("New");
+				else if (tcb[i].state == S_READY) my_printf("Ready");
+				else if (tcb[i].state == S_RUNNING) my_printf("Running");
+				else if (tcb[i].state == S_BLOCKED) my_printf("Blocked    %s",
+						tcb[i].event->name);
+				else if (tcb[i].state == S_EXIT) my_printf("Exiting");
+				swapTask();
+			}
+		}
+	}
+	for ( tsk=0; tsk <=MAX_TASKS ; tsk++) {
+		if(blockedQueue[tsk] != -1) {
+			i = blockedQueue[tsk];
+			printf("\n%4d/%-4d%20s%4d  ", i, tcb[i].parent,
+					tcb[i].name, tcb[i].priority);
+			if (tcb[i].signal & mySIGSTOP) my_printf("Paused");
+			else if (tcb[i].state == S_NEW) my_printf("New");
+			else if (tcb[i].state == S_READY) my_printf("Ready");
+			else if (tcb[i].state == S_RUNNING) my_printf("Running");
+			else if (tcb[i].state == S_BLOCKED) my_printf("Blocked    %s",
+					tcb[i].event->name);
+			else if (tcb[i].state == S_EXIT) my_printf("Exiting");
+			swapTask();
+		}
+	}
+
 	return 0;
 } // end P2_listTasks
 
@@ -120,21 +181,21 @@ int P2_listTasks(int argc, char* argv[])
 //
 int match(char* mask, char* name)
 {
-   int i,j;
+	int i,j;
 
-   // look thru name
+	// look thru name
 	i = j = 0;
 	if (!mask[0]) return 1;
 	while (mask[i] && name[j])
-   {
+	{
 		if (mask[i] == '*') return 1;
 		if (mask[i] == '?') ;
 		else if ((mask[i] != toupper(name[j])) && (mask[i] != tolower(name[j]))) return 0;
 		i++;
 		j++;
-   }
+	}
 	if (mask[i] == name[j]) return 1;
-   return 0;
+	return 0;
 } // end match
 
 int P2_listSems(int argc, char* argv[])				// listSemaphores
@@ -145,7 +206,7 @@ int P2_listSems(int argc, char* argv[])				// listSemaphores
 		if ((argc == 1) || match(argv[1], sem->name))
 		{
 			printf("\n%20s  %c  %d  %s", sem->name, (sem->type?'C':'B'), sem->state,
-	  					tcb[sem->taskNum].name);
+					tcb[sem->taskNum].name);
 		}
 		sem = (Semaphore*)sem->semLink;
 	}

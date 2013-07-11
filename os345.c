@@ -56,6 +56,7 @@ Semaphore* inBufferReady;			// input buffer ready semaphore
 
 Semaphore* tics1sec;				// 1 second semaphore
 Semaphore* tics10thsec;				// 1/10 second semaphore
+Semaphore* tics10sec;				// 10 second semaphore
 
 // **********************************************************************
 // **********************************************************************
@@ -99,6 +100,7 @@ struct winsize w;
 int ** readyQueue;
 int * blockedQueue;
 int tick;
+int ten;
 
 // Project 2 methods
 void taskReadyToBlocked(int t);
@@ -201,6 +203,7 @@ int main(int argc, char* argv[])
 	keyboard = createSemaphore("keyboard", BINARY, 1);
 	tics1sec = createSemaphore("tics1sec", BINARY, 0);
 	tics10thsec = createSemaphore("tics10thsec", BINARY, 0);
+	tics10sec = createSemaphore("tics10sec",COUNTING,0);
 
 	//?? ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -376,6 +379,8 @@ static void timer_isr()
 		// signal 1 second
 		semSignal(tics1sec);
 		oldTime1 += 1;
+		ten = ten + 1;
+		// printf("\nONE SECOND! and tics10sec = %d",tics10sec->state);
 	}
 
 	// sample fine clock
@@ -387,6 +392,10 @@ static void timer_isr()
 	}
 
 	// ?? add other timer sampling/signaling code here for project 2
+	if(ten >= 10) {
+		ten = 0;
+		semSignal(tics10sec);
+	}
 
 	return;
 } // end timer_isr
@@ -682,7 +691,8 @@ static void initOS()
 			readyQueue[i2][j] = -1;
 		}
 	}
-	tick = 300000;
+	tick = 1;
+
 
 	// initialize blocked queue an int[MAX_TASKS]
 	blockedQueue = malloc((MAX_TASKS+1)*sizeof(int));
@@ -718,16 +728,26 @@ void powerDown(int code)
 	// free ready queue
 	free(rq);
 
-	// ?? release any other system resources
+	// release any other system resources
 	int i2;
 	// free ready queue an int[MAX_PRIORITY][MAX_TASKS]
 
-	for(i2=0; i2<MAX_PRIORITY; i2++) {
+	for(i2=0; i2<=MAX_PRIORITY; i2++) {
 		// readyQueue[i2] = malloc(MAX_TASKS * sizeof(int));
 		free(readyQueue[i2]);
 	}
 	//readyQueue = malloc(MAX_PRIORITY * sizeof(int*));
 	free(readyQueue);
+
+	// free blocked queue
+	free(blockedQueue);
+
+	int z;
+	for (z = 0; z < HISTORY_MAX ; z++) {
+		free(prevArgs[z]);
+	}
+	free(prevArgs);
+
 	// ?? deltaclock (project 3)
 
 	RESTORE_OS
@@ -891,7 +911,7 @@ int createTask(char* name,						// task name
 			// Each task must have its own stack and stack pointer.
 			tcb[tid].stack = malloc(STACK_SIZE * sizeof(int));
 
-			// ?? may require inserting task into "ready" queue
+			// may require inserting task into "ready" queue
 			int q = 0;
 			while(readyQueue[priority][q++] != -1) {}
 			q = q-1;
@@ -997,18 +1017,22 @@ static int sysKillTask(int taskId)
 	// delete from blocked queue
 	removeFromBlockedQueue(taskId);
 
-
+	free(tcb[taskId].name);
+	free(tcb[taskId].stack);
 	tcb[taskId].name = 0;			// release tcb slot
+
 	return 0;
 } // end killTask
 
 void removeFromBlockedQueue(int t) {
+	// printf("\nremoving task %d from blocked.",t);
 	int j;
 	bool found = FALSE;
 	for ( j = 0 ; j < MAX_TASKS ; j++) {	// remove from blocked queue
 		if(blockedQueue[j] == t || found) {
 			found = TRUE;
 			blockedQueue[j] = blockedQueue[j+1];	// shift queue
+			// printf("\ntask %d is now at %d",blockedQueue[j],j);
 			if(blockedQueue[j] == -1) break;
 		}
 	}
@@ -1044,10 +1068,21 @@ void taskBlockedToReady(int t) {
 	while(readyQueue[tcb[t].priority][q++] != -1) {}
 	q = q-1;
 	readyQueue[tcb[t].priority][q] = t;
-	// printf("\nreentered task id %d into slot [%d][%d] from blockedQueue",i,tcb[i].priority,q);
+	// printf("\nreentered task id %d into slot [%d][%d] from blockedQueue",t,tcb[t].priority,q);
 
 }
 
+
+void taskReadyToBlocked(int t) {
+	// ?? move task from ready queue to blocked queue
+	if(removeFromReadyQueue(t)) { // move to blocked queue
+		int j = 0;
+		while(blockedQueue[j++] != -1){};	// insert in at end of blocked
+		j = j-1;
+		blockedQueue[j]=t;
+		// printf("\nput %d in blocked queue at %d\n",t,j);
+	}
+}
 
 // **********************************************************************
 // **********************************************************************
@@ -1095,30 +1130,21 @@ void semSignal(Semaphore* s)
 		if(s->state == 1) {
 			// unblock a task waiting on this counting sem.
 			for (i=0; i<MAX_TASKS; i++)	{ // look for suspended task
-				if (tcb[i].event == s) {
-					tcb[i].event = 0;			// clear event pointer
-					tcb[i].state = S_READY;		// unblock task
+				if(blockedQueue[i] == -1) {
+					return;
+				}
+				if (tcb[blockedQueue[i]].event == s) {
+					tcb[blockedQueue[i]].event = 0;			// clear event pointer
+					tcb[blockedQueue[i]].state = S_READY;		// unblock task
 
 					// move task from blocked to ready queue
-					taskBlockedToReady(i);
+					taskBlockedToReady(blockedQueue[i]);
 
 					if (!superMode) swapTask();
 					return;
 				}
 			}
 		} // end semSignal
-	}
-}
-
-
-
-void taskReadyToBlocked(int t) {
-	// ?? move task from ready queue to blocked queue
-	if(removeFromReadyQueue(t)) { // move to blocked queue
-		int j = 0;
-		while(blockedQueue[j++] != -1){};	// insert in at end of blocked
-		j = j-1;
-		blockedQueue[j]=t;
 	}
 }
 

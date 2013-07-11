@@ -54,7 +54,6 @@ extern int curTask;						// current task
 Command** commands;						// shell commands
 extern char* myTime(char*);
 
-
 // ***********************************************************************
 // project 1 prototypes
 Command** P1_init(void);
@@ -71,12 +70,12 @@ extern struct winsize w;
 
 
 int is_empty(const char *s) {
-  while (*s != '\0') {
-    if (!isspace(*s))
-      return 0;
-    s++;
-  }
-  return 1;
+	while (*s != '\0') {
+		if (!isspace(*s))
+			return 0;
+		s++;
+	}
+	return 1;
 }
 
 // ***********************************************************************
@@ -109,6 +108,7 @@ int P1_shellTask(int argc, char* argv[])
 
 	while (1)
 	{
+
 		// output prompt
 		if (diskMounted) printf("\n%s>>", dirPath);
 		else printf("\n%ld>>", swapCount);
@@ -206,7 +206,7 @@ int P1_shellTask(int argc, char* argv[])
 				newArgvInsensitive[j] = tolower(newArgvInsensitive[j]);
 			}
 			if (!strcmp(newArgvInsensitive, commands[i]->command) ||
-				 !strcmp(newArgvInsensitive, commands[i]->shortcut))
+					!strcmp(newArgvInsensitive, commands[i]->shortcut))
 			{
 				// command found
 				if(newTask) {
@@ -287,6 +287,7 @@ int P1_quit(int argc, char* argv[])
 		free(commands[i]->command);
 		free(commands[i]->shortcut);
 		free(commands[i]->description);
+		free(commands[i]);
 	}
 	free(commands);
 
@@ -433,7 +434,7 @@ int P1_help(int argc, char* argv[])
 //
 Command* newCommand(char* command, char* shortcut, int (*func)(int, char**), char* description)
 {
-	Command* cmd = (Command*)malloc(sizeof(Command));
+	Command* cmd = (Command*) malloc(sizeof(Command));
 
 	// get long command
 	cmd->command = (char*)malloc(strlen(command) + 1);
@@ -501,8 +502,8 @@ Command** P1_init()
 
 	// P5: Scheduling
 	commands[i++] = newCommand("project5", "p5", P5_project5, "P5: Scheduling");
-//	commands[i++] = newCommand("stress1", "t1", P5_stress1, "ATM stress test1");
-//	commands[i++] = newCommand("stress2", "t2", P5_stress2, "ATM stress test2");
+	//	commands[i++] = newCommand("stress1", "t1", P5_stress1, "ATM stress test1");
+	//	commands[i++] = newCommand("stress2", "t2", P5_stress2, "ATM stress test2");
 
 	// P6: FAT
 	commands[i++] = newCommand("project6", "p6", P6_project6, "P6: FAT");
