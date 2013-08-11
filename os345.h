@@ -208,6 +208,24 @@ int semTryLock(Semaphore*);
 int sigAction(void (*sigHandler)(void), int sig);
 int sigSignal(int taskId, int sig);
 
+// ***********************************************************************
+// project 3 struct
+/**
+ * struct clockEvent - an event structure for the delta clock
+ * @init_value: the initial value of the delay
+ * @time: the current number of ticks until signaled
+ * @sem: the semaphore that will be signaled upon completion
+ * @periodic: this value determines if the event should be repeated
+ * @next: the pointer to the next event in the linked list
+ */
+typedef struct event {
+	int init_value;
+	int time;
+	Semaphore* sem;
+	int periodic;
+	struct event* next;
+} clockEvent;
+
 
 // ***********************************************************************
 #define POWER_UP					0
@@ -247,6 +265,7 @@ int P2_timeThis(int, char**);
 
 int P3_project3(int, char**);
 int P3_dc(int, char**);
+int P3_dc_test(int, char**);
 
 int P4_project4(int, char**);
 int P4_dumpFrame(int, char**);
