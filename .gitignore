@@ -1,2 +1,5 @@
 bin
 obj
+.checkstyle
+.settings/org.eclipse.cdt.core.prefs
+.settings/org.eclipse.cdt.ui.prefs

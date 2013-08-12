@@ -23,18 +23,23 @@
 #include <assert.h>
 #include "os345.h"
 
-#define NUM_GROUPS	4
-#define NUM_GROUP_REPORT_SECONDS	5
+#define NUM_PARENTS			5
+#define NUM_REPORT_SECONDS	3
 
 // ***********************************************************************
 // project 5 variables
 
-int P5_group(int argc, char* argv[]);
+int parentTask(int argc, char* argv[]);
 int groupReportTask(int argc, char* argv[]);
-int groupTask(int argc, char* argv[]);
+int childTask(int argc, char* argv[]);
 
-long int group_count[NUM_GROUPS];	// group counters
+Semaphore* childALive;				// childALive semaphore
+Semaphore* parentDead;				// parent dead
 extern Semaphore* tics1sec;			// 1 second semaphore
+extern int curTask;					// current task #
+extern int scheduler_mode;			// scheduler mode
+long int group_count[NUM_PARENTS];	// parent group counters
+int num_siblings[NUM_PARENTS];		// number in each group
 
 // ***********************************************************************
 // ***********************************************************************
@@ -44,139 +49,153 @@ extern Semaphore* tics1sec;			// 1 second semaphore
 int P5_project5(int argc, char* argv[])		// project 5
 {
 	int i;
-	char** args[10];						// maximum of 10 tasks
+	char* new_argv[4];						// child arguments
 	char arg1[16];
 	char arg2[16];
 	char arg3[16];
 
-	static char* g1Argv[] = {"group1", "1", "1"};
-	static char* g2Argv[] = {"group2", "2", "5"};
-	static char* g3Argv[] = {"group3", "3", "10"};
-	static char* g4Argv[] = {"group4", "4", "20"};
-	static char* groupReportArgv[] = {"groupReport", "3"};
+	static char* groupReportArgv[] = { "groupReport", "4" };
+
+	// check if just changing scheduler mode
+	if (argc > 1) {
+		scheduler_mode = atoi(argv[1]);
+		printf("\nScheduler Mode = %d (%s)", scheduler_mode, scheduler_mode ? "FSS" : "RR");
+		return 0;
+	}
 
 	printf("\nStarting Project 5");
 
-	for (i=0; i<NUM_GROUPS; i++)
-	{
-		group_count[i] = 0;
-		sprintf(arg1, "group%d", i + 1);
-		sprintf(arg2, "%d", i + 1);
-		sprintf(arg3, "%d", 1 + 4 * i);
-		args[0] = arg1;
-		args[1] = arg2;
-		args[2] = arg3;
-
-		printf("\narg1 = %s", arg1);
-		printf("\narg2 = %s", arg2);
-		printf("\narg3 = %s", arg3);
-
-		createTask(arg1, P5_group, MED_PRIORITY, 3, args);
-/*
-
-	createTask("group1",					// task name
-				P5_group,					// task
-				MED_PRIORITY,				// task priority
-				3,							// task argc
-				g1Argv);					// task argument pointers
-
-	createTask("group2",					// task name
-				P5_group,					// task
-				MED_PRIORITY,				// task priority
-				3,							// task argc
-				g2Argv);					// task argument pointers
-
-	createTask("group3",					// task name
-				P5_group,					// task
-				MED_PRIORITY,				// task priority
-				3,							// task argc
-				g3Argv);					// task argument pointers
-
-	createTask("group4",					// task name
-				P5_group,					// task
-				MED_PRIORITY,				// task priority
-				3,							// task argc
-				g4Argv);					// task argument pointers
-*/
+	for (i = 0; i < NUM_PARENTS; ++i) {
+		num_siblings[i] = (rand() % 25) + 1;
+		printf("\nGroup[%d] = %d", i, num_siblings[i]);
 	}
-	createTask("Group Report"	,			// task name
-				groupReportTask,			// task
-				MED_PRIORITY,				// task priority
-				2,							// task argc
-				groupReportArgv);			// task argument pointers
+
+	childALive = createSemaphore("childALive", BINARY, 0);
+	parentDead = createSemaphore("parentDead", BINARY, 0);
+
+	// create parents
+	for (i = 0; i < NUM_PARENTS; i++) {
+		group_count[i] = 0;					// zero group counter
+
+		sprintf(arg1, "parent%d", i + 1);
+		sprintf(arg2, "%d", i + 1);
+//		sprintf(arg3, "%d", 1 + 4 * i);
+		sprintf(arg3, "%d", num_siblings[i]);
+		new_argv[0] = arg1;
+		new_argv[1] = arg2;
+		new_argv[2] = arg3;
+
+		printf("\nCreate %s with %d child%s", arg1, atoi(arg3), (atoi(arg3) == 1 ? "" : "ren"));
+		createTask(new_argv[0]				// task name
+				, parentTask,				// parent task
+				MED_PRIORITY,			// priority
+				3,						// argc
+				new_argv);				// argv
+		SEM_WAIT(parentDead);
+		// wait for parent to die
+	}
+
+	// create reporting task
+	createTask("Group Report",			// task name
+			groupReportTask,			// task
+			MED_PRIORITY,				// task priority
+			2,							// task argc
+			groupReportArgv);			// task argument pointers
 	return 0;
 } // end P5_project5
 
-
-
 // ***********************************************************************
-// ***********************************************************************
-// Group Report task
-// ***********************************************************************
-int groupReportTask(int argc, char* argv[])
-{
-	int i;
-	int count = NUM_GROUP_REPORT_SECONDS;
-
-	while (1)
-	{
-		while (count-- > 0)
-		{
-		   	// update every second
-			SEM_WAIT(tics1sec);
-
-		}
-		printf("\nGroups:");
-		for (i=0; i<NUM_GROUPS; i++) printf("%10ld", group_count[i]);
-
-		count = NUM_GROUP_REPORT_SECONDS;
-	}
-	return 0;
-} // end
-
-
-
 // ***********************************************************************
 //	group parent - create children
 //		argv[0] = group base name
 //		argv[1] = parent #
 //		argv[2] = # of children
-// ***********************************************************************
-int P5_group(int argc, char* argv[])		// group 1
+//
+int parentTask(int argc, char* argv[])		// group 1
 {
-	int i, num_tasks;
+	int i, num_children;
 	char buffer[32];
+	int parent = atoi(argv[1]);
+	num_children = atoi(argv[2]);
 
-	num_tasks = atoi(argv[2]);
-
-	for (i = 0; i < num_tasks; i++)
-	{
-		sprintf(buffer, "%s%c", argv[0], 'A'+i);
+	for (i = 'a'; i < 'a' + num_children; i++) {
+		sprintf(buffer, "%s%d%c", "child_", atoi(argv[1]), i);
 		createTask(buffer,					// task name
-				groupTask,					// task
-				MED_PRIORITY,				// task priority
+				childTask,					// task
+				MED_PRIORITY,				// priority
 				3,							// task argc
 				argv);						// task argument pointers
+		SEM_WAIT(childALive);
+		// wait until child is going
 	}
+	SEM_SIGNAL(parentDead);
+	// parent dies
+
+//	while (1) SWAP;							// keep parent alive
+	while (1) {
+		++group_count[parent - 1];
+		SWAP
+		;
+	}
+
 	return 0;
-} // end P5_group
-
-
+} // end parentTask
 
 // ***********************************************************************
-//	group task
+// ***********************************************************************
+//	child task
 //		argv[0] = group base name
 //		argv[1] = parent #
-//		argv[2] = # of children
-// ***********************************************************************
-int groupTask(int argc, char* argv[])		// group Task
+//		argv[2] = # of siblings
+//
+int childTask(int argc, char* argv[])		// child Task
 {
-	int group = atoi(argv[1]) - 1;
+	int parent = atoi(argv[1]);
+	if ((parent < 1) || (parent > NUM_PARENTS)) {
+		printf("\n**Parent Error!  Task %d, Parent %d", curTask, parent);
+		return 0;							// die!!
+	}
 
-	while (1)
-	{
-		group_count[group]++;
-		SWAP;
+	SEM_SIGNAL(childALive);
+	// child is alive!!
+	// count # of times scheduled
+	while (1) {
+		group_count[parent - 1]++;
+		SWAP
+		;
 	}
 	return 0;
-} // end groupTask
+} // end childTask
+
+// ***********************************************************************
+// ***********************************************************************
+// Group Report task
+//
+int groupReportTask(int argc, char* argv[]) {
+	int i;
+	int count = NUM_REPORT_SECONDS;
+	long int sum;
+
+	while (1) {
+		while (count-- > 0) {
+			// update every second
+			SEM_WAIT(tics1sec);
+
+		}
+
+		sum = 0;
+		for (i = 0; i < NUM_PARENTS; ++i)
+			sum += group_count[i];
+
+		printf("\nGroups:");
+		for (i = 0; i < NUM_PARENTS; i++) {
+//			printf("%10ld", group_count[i]);
+			printf("%10ld (%d%%)", group_count[i], (group_count[i] * 100) / sum);
+			group_count[i] = 0;
+		}
+
+		count = NUM_REPORT_SECONDS;
+	}
+	return 0;
+} // end groupReportTask
+

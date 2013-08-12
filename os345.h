@@ -44,7 +44,7 @@
 
 // Task state equates
 #define S_NEW                                   0
-#define S_READY                         1
+#define S_READY                        			1
 #define S_RUNNING                               2
 #define S_BLOCKED                               3
 #define S_EXIT                                  4
@@ -95,24 +95,25 @@ typedef struct semaphore                        // semaphore
 // task control block
 typedef struct                                                  // task control block
 {
-	char* name;                                                     // task name
-	int (*task)(int, char**);                // task address
-	int state;                                                      // task state
-	int priority;                                           // task priority (project 2)
-	int argc;                                                   // task argument count (project 1)
-	char** argv;                                            // task argument pointers (project 1)
-	int signal;                                                     // task signals (project 1)
-	void (*sigContHandler)(void);   // task mySIGCONT handler
-	void (*sigIntHandler)(void);    // task mySIGINT handler
-	void (*sigKillHandler)(void);   // task mySIGKILL handler
-	void (*sigTermHandler)(void);   // task mySIGTERM handler
-	void (*sigTstpHandler)(void);   // task mySIGTSTP handler
-	TID parent;                                                     // task parent
-	int RPT;                                                   // task root page table (project 5)
-	int cdir;                                                       // task directory (project 6)
-	Semaphore *event;                                       // blocked task semaphore
-	void* stack;                                            // task stack
-	jmp_buf context;                                        // task context pointer
+	char* name;                         // task name
+	int (*task)(int, char**);           // task address
+	int state;                          // task state
+	int priority;                       // task priority (project 2)
+	int argc;                           // task argument count (project 1)
+	char** argv;                        // task argument pointers (project 1)
+	int signal;                         // task signals (project 1)
+	void (*sigContHandler)(void);   	// task mySIGCONT handler
+	void (*sigIntHandler)(void);    	// task mySIGINT handler
+	void (*sigKillHandler)(void);   	// task mySIGKILL handler
+	void (*sigTermHandler)(void);   	// task mySIGTERM handler
+	void (*sigTstpHandler)(void);   	// task mySIGTSTP handler
+	TID parent;                         // task parent
+	int RPT;                            // task root page table (project 5)
+	int cdir;                           // task directory (project 6)
+	Semaphore *event;                   // blocked task semaphore
+	void* stack;                        // task stack
+	jmp_buf context;                    // task context pointer
+	int time;							// task time variable
 } TCB;
 //delta clock for P3
 typedef struct {
@@ -282,18 +283,9 @@ int P4_virtualMemStats(int, char**);
 int P4_crawler(int, char**);
 int P4_memtest(int, char**);
 
-int P5_dumpFrame(int, char**);
-int P5_dumpFrameTable(int, char**);
-int P5_dumpLC3Mem(int, char**);
-int P5_dumpPageMemory(int, char**);
-int P5_dumpVirtualMem(int, char**);
-int P5_initMemory(int, char**);
-int P5_rootPageTable(int, char**);
-int P5_userPageTable(int, char**);
-int P5_vmaccess(int, char**);
-int P5_virtualMemStats(int, char**);
-int P5_crawler(int, char**);
-int P5_memtest(int, char**);
+
+#define SCHED_PRR 0
+#define SCHED_FAIR 1
 
 int P5_project5(int, char**);
 int P6_cd(int, char**);

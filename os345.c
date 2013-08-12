@@ -51,6 +51,9 @@ int deque(int* queue, int taskId, int* count);
 void sort(int* queue, int count);
 
 void iniq(int* queue, int* count);
+
+int scheduler_mode;
+
 // **********************************************************************
 // **********************************************************************
 // global semaphores
@@ -97,6 +100,9 @@ clock_t myClkTime2;
 clock_t myOldClkTime2;
 int rq[MAX_TASKS];                                                         // ready priority queue
 int taskCount;
+
+bool fairStart;
+void resetFair();
 
 char** history;
 int lastCommand;
@@ -397,7 +403,6 @@ static void timer_isr() {
 		myOldClkTime2 = myOldClkTime2 + TEN_SEC;   // update old
 		semSignal(tics10sec);
 		//printf("10sec");
-		;
 	}
 
 	return;
@@ -424,56 +429,128 @@ static void pollInterrupts(void) {
 	return;
 } // end pollInterrupts
 
+int getFamilyCount(int * q, int baseID) {
+	//printf("getFamilyCount\n");
+	int family = 1;
+	if (baseID == 0)
+		return 1;
+	int i;
+	for (i = 0; i < MAX_TASKS; i++) {
+		if (tcb[q[i]].name != NULL && tcb[q[i]].parent == baseID) {
+			family = family + getFamilyCount(q, q[i]);
+		}
+	}
+	return family;
+}
+
+bool bigFamily = FALSE;
+bool printed = FALSE;
+// call this when all times for all ready tasks is zero.
+// This will allocate each task it's fair share of time
+void resetFair(int * q, int baseID) {
+	//printf("resetFair\n");
+	int parentTime = 0;
+	int numChildren = 1;
+	int maxFamily = 1;
+	int i;
+	for (i = 0; i < MAX_TASKS; i++) {
+		if (tcb[i].name != NULL && tcb[i].state != S_BLOCKED && tcb[i].parent == baseID) {
+			numChildren = numChildren + 1;
+			int thisFamily = getFamilyCount(q, i);
+			if (thisFamily > maxFamily) {
+				maxFamily = thisFamily;
+			}
+		}
+	}
+	if(numChildren > 1)
+		numChildren = numChildren - 1;
+	if (maxFamily > 20)
+		bigFamily = TRUE;
+	if (baseID == 0) {
+		parentTime = maxFamily * numChildren;
+	} else {
+		parentTime = tcb[baseID].time;
+	}
+	tcb[baseID].time = parentTime / numChildren;
+	//printf("set id %d to time = %d\n",baseID,tcb[baseID].time);
+	for (i = 0; i < MAX_TASKS; i++) {
+		if (tcb[i].name != NULL && tcb[i].state != S_BLOCKED && tcb[i].parent == baseID
+				&& 0 != i) {
+			tcb[i].time = parentTime / numChildren;
+			//printf("set id %d to time = %d\n",i,tcb[i].time);
+			resetFair(q, i);
+		}
+	}
+	if (maxFamily % numChildren != 0) {
+		int extra = maxFamily % numChildren;
+		tcb[baseID].time = tcb[baseID].time + extra;
+	}
+	if (baseID == 0) {
+		int i;
+		for (i = 0; i < MAX_TASKS; i++) {
+			if (tcb[i].name != NULL ) {
+				//printf("\ntask %d has parent %d and time %d, state=%d, maxFam = %d, numChildren = %d", i, tcb[i].parent, tcb[i].time,tcb[i].state, maxFamily,numChildren);
+			}
+		}
+	}
+}
+
+// this returns the task with the greatest time.
+int getFair(int * q) {
+	//printf("getFair\n");
+	int biggestTime = 0;
+	int id = 0;
+	int i;
+	for (i = 0; i < MAX_TASKS; i++) {
+		if (tcb[i].name != NULL && tcb[i].state != S_BLOCKED) {
+			if (tcb[i].time > 0) {
+				return i;
+			}
+		}
+	}
+	return id;
+}
+
+// this checks the passed queue to see if all times are zero
+bool readyQueueAllZero(int * q) {
+	//printf("readyQueueAllZero\n");
+	bool allZero = TRUE;
+	int i;
+	for (i = 0; i < MAX_TASKS; i++) {
+		if (tcb[i].name != NULL && tcb[i].state != S_BLOCKED && tcb[i].time > 0) {
+			return FALSE;
+		}
+	}
+	return allZero;
+}
+
 // **********************************************************************
 // **********************************************************************
 // scheduler
 //
 static int scheduler() {
 	int nextTask;
-// ?? Design and implement a scheduler that will select the next highest
-// ?? priority ready task to pass to the system dispatcher.
+	if (scheduler_mode == SCHED_PRR) {
+		fairStart = TRUE;
+		nextTask = deque(rq, -1, &taskCount);
+		if (nextTask >= 0)
+			enque(rq, nextTask, &taskCount);
 
-// ?? WARNING: You must NEVER call swapTask() from within this function
-// ?? or any function that it calls.  This is because swapping is
-// ?? handled entirely in the swapTask function, which, in turn, may
-// ?? call this function.  (ie. You would create an infinite loop.)
-
-// ?? Implement a round-robin, preemptive, prioritized scheduler.
-
-// ?? This code is simply a round-robin scheduler and is just to get
-// ?? you thinking about scheduling.  You must implement code to handle
-// ?? priorities, clean up dead tasks, and handle semaphores appropriately.
-
-// schedule next task
-//nextTask = ++curTask;
-
-//printf("%d",curTask);
-	/*for(int i=0;i<MAX_TASKS;i++)
-	 {
-	 if(tcb[i].name&&tcb[i].state<2)
-	 enque(rq,i,&taskCount);
-	 }*/
-//if(taskCount==2)
-//printf("\nrq1: %d%d%d",taskCount,rq[0],rq[1]);
-//if(taskCount==2)
-//printf("\nrq2: %d%d%d",taskCount,rq[0],rq[1]);
-	nextTask = deque(rq, -1, &taskCount);
-	if (nextTask >= 0)
-		enque(rq, nextTask, &taskCount);
-
-//if(taskCount==1)
-//printf("\nrq3:%d%d%d",taskCount,nextTask,rq[0]);
-// mask sure nextTask is valid
-//while (!tcb[nextTask].name)
-	{
-		//if (++nextTask >= MAX_TASKS) nextTask = 0;
-		//if (nextTask == -1) nextTask = 0;
-
+		if (tcb[nextTask].signal & mySIGSTOP)
+			return -1;
+	} else {
+		//printf("\n\nSched\n");
+		//sleep(1);
+		if (fairStart) {
+			resetFair(rq, 0);
+			fairStart = FALSE;
+		}
+		if (readyQueueAllZero(rq)) {
+			resetFair(rq, 0);
+		}
+		nextTask = getFair(rq);
+		tcb[nextTask].time = tcb[nextTask].time - 1;
 	}
-
-	if (tcb[nextTask].signal & mySIGSTOP)
-		return -1;
-//if (tcb[nextTask].signal & mySIGSTOP) tcb[nextTask].signal & ~mySIGSTOP;
 
 	return nextTask;
 } // end scheduler
@@ -647,6 +724,7 @@ static void initOS() {
 // malloc ready queue
 //rq = (int*)malloc(MAX_TASKS * sizeof(int));
 	iniq(rq, &taskCount);
+	fairStart = TRUE;
 // capture current time
 	lastPollClock = clock();                // last pollClock
 	time(&oldTime1);
@@ -798,16 +876,15 @@ void defaultSigTstpHandler(void) {
 // **********************************************************************
 // **********************************************************************
 // create task
-int createTask(char* name,                                              // task name
-		int (*task)(int, char**),       // task address
-		int priority,                                   // task priority
-		int argc,                                               // task argument count
-		char* argv[])                                   // task argument pointers
+int createTask(char* name,                  // task name
+		int (*task)(int, char**),       	// task address
+		int priority,                       // task priority
+		int argc,                           // task argument count
+		char* argv[])                       // task argument pointers
 {
 	int tid;
-//taskCount++;
 // find an open tcb entry slot
-//printf("create task");
+
 	for (tid = 0; tid < MAX_TASKS; tid++) {
 		if (tcb[tid].name == 0) {
 			char buf[8];
@@ -829,6 +906,7 @@ int createTask(char* name,                                              // task 
 			tcb[tid].priority = priority;   // task priority
 			tcb[tid].parent = curTask;              // parent
 			tcb[tid].argc = argc;                   // argument count
+			tcb[tid].time = 10;
 
 			// ?? malloc new argv parameters
 
@@ -866,7 +944,7 @@ int createTask(char* name,                                              // task 
 
 			// ?? may require inserting task into "ready" queue
 			//rq[0]=tid;
-			printf("create task2:%d", tid);
+			//printf("create task2:%d", tid);
 			enque(rq, tid, &taskCount);
 			if (tid)
 				swapTask();                            // do context switch (if not cli)
@@ -1392,8 +1470,7 @@ int deque(int* queue, int taskId, int * count) { //printf("\ndeque:|%d|%d|%d|",t
 	if ((*count) == 0) {
 		return -1;
 	}
-	if (taskId == -1)       //taskId==-1
-			{
+	if (taskId == -1) {
 		int result = queue[0];
 		int i;
 		for (i = 0; i <= (*count); i++) {
@@ -1402,8 +1479,7 @@ int deque(int* queue, int taskId, int * count) { //printf("\ndeque:|%d|%d|%d|",t
 		}
 		(*count)--;
 		return result;
-	} else       //taskId
-	{
+	} else {
 		int pivot;
 		int i;
 		for (i = 0; i < (*count); i++) {
@@ -1430,10 +1506,6 @@ void sort(int* list, int count) {
 			list[i - 1] = list[i];
 			list[i] = tmp;
 		}
-		/*else
-		 {
-		 break;
-		 }*/
 	}
 }
 
