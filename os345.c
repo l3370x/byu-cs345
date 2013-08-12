@@ -152,16 +152,11 @@ void saveCommandInHistory(char * command) {
 clockEvent* deltaClock = 0;
 
 #define ONE_TENTH_SEC           (CLOCKS_PER_SEC/10)
-static const int PERIODIC = 1;
-static const int NOT_PERIODIC = 0;
 
-int insertDeltaClock(int time, Semaphore * semId, int periodic);
+int insertDeltaClock(int time, Semaphore * semId);
 int deleteClockEvent(Semaphore* semId);
 int tickDeltaClock();
 int listDeltaClock();
-
-int testDeltaClock(int argc, char* argv[]);
-int deltaClockTestTask(int argc, char* argv[]);
 
 // **********************************************************************
 // **********************************************************************
@@ -847,9 +842,12 @@ int createTask(char* name,						// task name
 
 			// ?? malloc new argv parameters
 			char **newArgv = malloc(sizeof(char*) * argc);
+
 			int z;
 			for (z = 0; z < argc; z++) {
-				newArgv[z] = argv[z];
+				char * newArgvInsert = malloc(sizeof(char) * (strlen(argv[z]) + 1));
+				sprintf(newArgvInsert,argv[z]);
+				newArgv[z] = newArgvInsert;
 			}
 			tcb[tid].argv = newArgv;			// argument pointers
 
@@ -1216,7 +1214,7 @@ Semaphore* createSemaphore(char* name, int type, int state) {
 
 	// assert semaphore is binary or counting
 	assert("createSemaphore Error" && ((type == 0) || (type == 1)));
-	// assert type is validate
+	// assert type is valid
 
 	// look for duplicate name
 	while (sem) {
@@ -1269,7 +1267,7 @@ bool deleteSemaphore(Semaphore** semaphore) {
 			*semLink = (Semaphore*) sem->semLink;
 
 			// free the name array before freeing semaphore
-			printf("\ndeleteSemaphore(%s)", sem->name);
+			// printf("\ndeleteSemaphore(%s)", sem->name);
 
 			// ?? free all semaphore memory
 			free(sem->name);
@@ -1359,8 +1357,6 @@ clockEvent* copyClock(clockEvent* other) {
 	copy->init_value = other->init_value;
 	// SWAP
 	copy->next = other->next;
-	// SWAP
-	copy->periodic = other->periodic;
 	// SWAP
 	copy->sem = other->sem;
 	// SWAP
@@ -1489,7 +1485,6 @@ void decrementDelta(int time, clockEvent * after) {
  * insertDeltaClock: insert a semaphore into the delta clock
  * @time: the delay in tenths of a second
  * @sem: the semaphore to be signaled at the end of the delay
- * @periodic: if the delay/signal should be repeated
  * @return: 0 if successful, -1 if failed
  *
  * This function should insert a clock event into the delta clock
@@ -1497,20 +1492,14 @@ void decrementDelta(int time, clockEvent * after) {
  * semaphore is invalid, the function should return -1.  If this time
  * is 0, the semaphore should be signaled before returning.
  */
-int insertDeltaClock(int time, Semaphore* semId, int periodic) {
+int insertDeltaClock(int time, Semaphore* semId) {
 	// SWAP
 	semWait(globalDelta);
 	// SWAP
-	printf("INSERTING time = %d, semId = %d, periodic = %d\n", time, semId, periodic);
+	//printf("INSERTING time = %d, semId = %d\n", time, semId);
 	// SWAP
-	// check to see if time = 0, if so then if the event isn't periodic, signal
 	// the semaphore (if it exists) and return.
 	if (time == 0) {
-		// SWAP
-		if (periodic) {
-			// SWAP
-			return -1;
-		}
 		// SWAP
 		if (!semId) {
 			// SWAP
@@ -1534,8 +1523,6 @@ int insertDeltaClock(int time, Semaphore* semId, int periodic) {
 		// SWAP
 		deltaClock->next = NULL;
 		// SWAP
-		deltaClock->periodic = periodic;
-		// SWAP
 		deltaClock->sem = semId;
 		// SWAP
 		deltaClock->time = time;
@@ -1554,8 +1541,6 @@ int insertDeltaClock(int time, Semaphore* semId, int periodic) {
 			deltaClock->init_value = time;
 			// SWAP
 			deltaClock->next = tmp;
-			// SWAP
-			deltaClock->periodic = periodic;
 			// SWAP
 			deltaClock->sem = semId;
 			// SWAP
@@ -1579,8 +1564,6 @@ int insertDeltaClock(int time, Semaphore* semId, int periodic) {
 			tmp->init_value = time;
 			// SWAP
 			tmp->next = NULL;
-			// SWAP
-			tmp->periodic = periodic;
 			// SWAP
 			tmp->sem = semId;
 			// SWAP
@@ -1609,7 +1592,7 @@ int insertDeltaClock(int time, Semaphore* semId, int periodic) {
 		}
 	}
 	// SWAP
-	listDeltaClock();
+	//listDeltaClock();
 	// SWAP
 	semSignal(globalDelta);
 	// SWAP
@@ -1685,8 +1668,6 @@ int deleteClockEvent(Semaphore * semId) {
  * Tick the delta clock on a 1/10th second resolution signaling events
  * as appropriate.  The clock should maintain a notion of time of last
  * call to manage clock drift as it is only called in pollInterrupts.
- * As semaphores are signaled, if the event is periodic, it should be
- * added back to the delta clock.
  */
 
 int tickDeltaClock() {
@@ -1725,59 +1706,21 @@ int tickDeltaClock() {
 /**
  *
  */
-int testDeltaClock(int argc, char* argv[]) {
-	// Implement a routine to test the delta clock
-	printf("Testing Delta Clock\n");
-
-	static char* deltaClockTestTaskArgv[] = { "deltaClockTestTask" };
-
-	// Store Random Number generator
-	srand((unsigned int) time(NULL ));
-
-	// Create 10 Delta Clock Test Tasks
-	int i;
-	for (i = 0; i < 20; i++) {
-		createTask("DeltaClockTest", deltaClockTestTask, MED_PRIORITY, 1, deltaClockTestTaskArgv);
-
+int listDeltaClock() {
+	printf("*********************\n");
+	printf("Delta Clock Contents\n");
+	// delta clock queue is empty
+	if (!deltaClock) {
+		printf("Empty\n");
 	}
-
-	return 0;
-}
-
-/**
- *
- */
-int deltaClockTestTask(int argc, char* argv[]) {
-	// Generate a random number for time
-	int eventTime = (rand() % 50) * 5 + 1;
-
-	struct timespec tstart = { 0, 0 }, tend = { 0, 0 };
-	clock_gettime(CLOCK_MONOTONIC, &tstart);
-
-	// Get taskId of this task
-	int taskId = curTask;
-	char * name = (char *) malloc(50);
-	sprintf(name, "deltaClockTestTaskSem%d - %d", taskId, eventTime);
-	Semaphore *semId = createSemaphore(name, BINARY, 0);
-
-	if (TRUE)
-		printf("Inserting Task %d into delta clock with time=%d\n", taskId, eventTime);
-
-	// Create a Clock Event Blocking on this task's semaphore
-	if (insertDeltaClock(eventTime, semId, 0) < 0) {
-		printf("There was an error trying to insert Semaphore %s with time %d\n", semId->name,
-				eventTime);
+	// Print all of the delta clock queue's contents
+	else {
+		clockEvent * n = deltaClock;
+		while (n) {
+			printf("Semaphore %s with time=%d\n", n->sem->name, n->time);
+			n = n->next;
+		}
 	}
-
-	// Wait
-	semWait(semId);
-
-	clock_gettime(CLOCK_MONOTONIC, &tend);
-	double difference = ((double) tend.tv_sec + 1.0e-9 * tend.tv_nsec)
-			- ((double) tstart.tv_sec + 1.0e-9 * tstart.tv_nsec);
-
-	printf("Task %d end. total time = %.5f, arg = %d ; diff = %.3f.\n", taskId, difference,
-			eventTime, difference - ((double)eventTime / 10));
-	free(name);
+	printf("*********************\n");
 	return 0;
 }
