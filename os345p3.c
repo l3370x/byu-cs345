@@ -144,7 +144,7 @@ int P3_project3(int argc, char* argv[]) {
 	//?? create car, driver, and visitor tasks here
 	//create 4 cars.
 	int i;
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < NUM_CARS; i++) {
 		sprintf(buf, "carTask%d", i);
 		char **temparg = (char**) malloc(sizeof(char**));
 		*temparg = (char*) malloc(sizeof(char));
@@ -165,7 +165,7 @@ int P3_project3(int argc, char* argv[]) {
 
 	}
 	//create driver
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < NUM_DRIVERS; i++) {
 		sprintf(buf, "driverTask%d", i);
 		char **temparg = (char**) malloc(sizeof(char**));
 		*temparg = (char*) malloc(sizeof(char));
@@ -349,9 +349,12 @@ int dcRefresh() {
 // display all pending events in the delta clock list
 void printDeltaClock(void) {
 	int i;
+	SWAP
 	for (i = 0; i < dCount; i++) {
+		SWAP
 		printf("\n%4d%4d  %-20s", i, clocks[i]->time, clocks[i]->event->name);
 	}
+	SWAP
 	return;
 }
 
@@ -436,11 +439,16 @@ int timeTask(int argc, char* argv[]) {
 int carTask(int argc, char* argv[]) {
 	//printf("\ncarTask%d%s",argc,argv[0]);
 	int carId;
+	SWAP
 	int visitor[2];
+	SWAP
 	if (argc == 1) {       //printf("\ncarId " );
+		SWAP
 		carId = atoi(argv[0]);
+		SWAP
 		//printf("\ncarId:%d",carId);
 	} else {
+		SWAP
 		return -1;
 	}
 	SWAP
@@ -470,31 +478,23 @@ int carTask(int argc, char* argv[]) {
 		//try to get 1 driver
 		semWait(fillSeat[carId]);
 		SWAP
-		;
 		currentCar = carId;
 		semSignal(waitCar);
 		SWAP
-		;
 		semWait(needDriverMutex);
 		SWAP
-		;
 		semSignal(needDrive);
 		SWAP
-		;
 		semSignal(sleepingDrivers);
 		SWAP
-		;
 		currentCar = carId;
 		semWait(readyToDrive);
 		SWAP
-		;
 		semSignal(seatFilled[carId]);
 		SWAP
-		;
 		//printf("\nCar:%d 3seat",carId);
 		semSignal(needDriverMutex);
 		SWAP
-		;
 
 		//riding
 		semWait(rideOver[carId]);
@@ -509,7 +509,6 @@ int carTask(int argc, char* argv[]) {
 		//printf("\nCar:%d rideover",carId);
 	}
 	SWAP
-	;
 	//dump driver
 
 	//continue
@@ -527,16 +526,23 @@ int carTask(int argc, char* argv[]) {
 int visitorTask(int argc, char* argv[]) {
 
 	int visitorId;
+	SWAP
 	if (argc == 1) {       //printf("\ncarId " );
+		SWAP
 		visitorId = atoi(argv[0]);
+		SWAP
 		//printf("\ncarId:%d",carId);
 	} else {
+		SWAP
 		return -1;
 	}
-
+	SWAP
 	int arriveTime = rand() % 10 * 10;
+	SWAP
 	int tickettime = rand() % 3 * 10;
+	SWAP
 	int museumtime = rand() % 3 * 10;
+	SWAP
 	int gifttime = rand() % 3 * 10;
 	//arrive outside park
 	SWAP
@@ -559,7 +565,6 @@ int visitorTask(int argc, char* argv[]) {
 	SWAP
 	semWait(parkMutex);
 	SWAP
-	;
 	myPark.numOutsidePark--;
 	myPark.numInPark++;
 	myPark.numInTicketLine++;
@@ -574,10 +579,8 @@ int visitorTask(int argc, char* argv[]) {
 	//buy ticket
 	semWait(ticket);       //12limit
 	SWAP
-	;
 	semWait(needDriverMutex);
 	SWAP
-	;
 	semSignal(sleepingDrivers);
 	SWAP
 	semSignal(needTicket);
@@ -588,7 +591,6 @@ int visitorTask(int argc, char* argv[]) {
 	SWAP
 	semSignal(needDriverMutex);
 	SWAP
-	;
 	semWait(parkMutex);
 	SWAP
 	myPark.numTicketsAvailable--;
@@ -603,12 +605,10 @@ int visitorTask(int argc, char* argv[]) {
 	SWAP
 	semWait(holdVisitor[visitorId]);
 	SWAP
-	;
 	//printf("\nVisitor%d in museum line",visitorId);
 	//into museum
 	semWait(museum);        //5 limit
 	SWAP
-	;
 	semWait(parkMutex);
 	SWAP
 	myPark.numInMuseumLine--;
@@ -623,12 +623,10 @@ int visitorTask(int argc, char* argv[]) {
 	//leave museum
 	semWait(parkMutex);
 	SWAP
-	;
 	semSignal(museum);
 	myPark.numInMuseum--;
 	myPark.numInCarLine++;
 	SWAP
-	;
 	semSignal(parkMutex);
 	semWait(waitCar);
 	//enter car
@@ -657,19 +655,11 @@ int visitorTask(int argc, char* argv[]) {
 	myPark.numInGiftLine++;
 	semSignal(parkMutex);
 
-	/*i=NUM_CARS;
-	 }
-	 }*/
-
-	//leave car,waiting gift
 	SWAP
-	;
 	insertDeltaClock(gifttime, holdVisitor[visitorId]);
 	SWAP
-	;
 	semWait(holdVisitor[visitorId]);
 	SWAP
-	;
 	//semWait(giftMutex);
 	semWait(gift);
 	SWAP
@@ -683,12 +673,10 @@ int visitorTask(int argc, char* argv[]) {
 	SWAP
 	insertDeltaClock(gifttime, holdVisitor[visitorId]);
 	SWAP
-	;
 
 	//leave park
 	semWait(holdVisitor[visitorId]);
 	SWAP
-	;
 	semWait(parkMutex);
 	//printf("\ngift.sem:%d inside gift:%d",gift->state,myPark.numInGiftShop);
 	SWAP
