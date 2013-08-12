@@ -32,7 +32,6 @@
 extern jmp_buf reset_context;
 // -----
 
-
 #define NUM_COMMANDS 52
 typedef struct								// command struct
 {
@@ -68,7 +67,6 @@ extern void saveCommandInHistory(char * command);
 extern void freeHistory();
 extern struct winsize w;
 
-
 int is_empty(const char *s) {
 	while (*s != '\0') {
 		if (!isspace(*s))
@@ -91,8 +89,7 @@ int is_empty(const char *s) {
 // 6. If found, perform a function variable call passing argc/argv variables.
 // 7. Supports background execution of non-intrinsic commands.
 //
-int P1_shellTask(int argc, char* argv[])
-{
+int P1_shellTask(int argc, char* argv[]) {
 	int i, found, newArgc;					// # of arguments
 	char** newArgv;							// pointers to arguments
 	bool newTask = FALSE;					// bool if & found at end
@@ -106,15 +103,18 @@ int P1_shellTask(int argc, char* argv[])
 	sigAction(mySIGCONTHandler, mySIGCONT);
 	sigAction(mySIGTERMHandler, mySIGTERM);
 
-	while (1)
-	{
+	while (1) {
 
 		// output prompt
-		if (diskMounted) printf("\n%s>>", dirPath);
-		else printf("\n%ld>>", swapCount);
+		if (diskMounted)
+			printf("\n%s>>", dirPath);
+		else
+			printf("\n%ld>>", swapCount);
 
-		SEM_WAIT(inBufferReady);			// wait for input buffer semaphore
-		if (!inBuffer[0]) continue;			// ignore blank lines
+		SEM_WAIT(inBufferReady);
+		// wait for input buffer semaphore
+		if (!inBuffer[0])
+			continue;			// ignore blank lines
 		// printf("%s", inBuffer);
 		ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);	// get window size
 		// printf ("lines %d\n", w.ws_row);
@@ -122,7 +122,8 @@ int P1_shellTask(int argc, char* argv[])
 
 		saveCommandInHistory(inBuffer);		// save command history
 
-		SWAP										// do context switch
+		SWAP
+		// do context switch
 
 		{
 			// ?? >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -133,21 +134,20 @@ int P1_shellTask(int argc, char* argv[])
 			// init arguments
 			newArgc = 1;
 			myArgv[0] = sp = inBuffer;				// point to input string
-			for (i=1; i<MAX_ARGS; i++)
+			for (i = 1; i < MAX_ARGS; i++)
 				myArgv[i] = 0;
 
 			// parse input string
-			while ((sp = strchr(sp, ' ')))
-			{
-				if(isspace(sp[1])) {
+			while ((sp = strchr(sp, ' '))) {
+				if (isspace(sp[1])) {
 					*sp++ = 0;
 					continue;
 				}
 				*sp++ = 0;
 				myArgv[newArgc++] = sp;
-				if (sp[0]=='"') {
-					char * quoteCopy2 = strchr((sp + 1),'"');
-					if(quoteCopy2 == NULL)		// second quote wasn't found
+				if (sp[0] == '"') {
+					char * quoteCopy2 = strchr((sp + 1), '"');
+					if (quoteCopy2 == NULL )		// second quote wasn't found
 						break;
 					sp = quoteCopy2 + 1;
 					//*sp++ = 0;
@@ -157,14 +157,15 @@ int P1_shellTask(int argc, char* argv[])
 			SWAP
 			// remove whitespace args
 			int i;
-			for ( i = 0 ; i < newArgc ; i++ ) {
-				if(is_empty(myArgv[i])){
+			for (i = 0; i < newArgc; i++) {
+				if (is_empty(myArgv[i])) {
 					int j;
-					for ( j = i ; j < newArgc ; j++) {
+					for (j = i; j < newArgc; j++) {
 						int i;
-						for ( i = 0 ; i <= strlen(myArgv[j]); i++ ) myArgv[j][i] = 0;
-						if(j != (newArgc - 1))
-							strcpy(myArgv[j],myArgv[j+1]);
+						for (i = 0; i <= strlen(myArgv[j]); i++)
+							myArgv[j][i] = 0;
+						if (j != (newArgc - 1))
+							strcpy(myArgv[j], myArgv[j + 1]);
 					}
 					i = i - 1;
 					newArgc = newArgc - 1;
@@ -172,9 +173,11 @@ int P1_shellTask(int argc, char* argv[])
 			}
 			SWAP
 			// if blank after clearing whitespace, ignore line
-			if(is_empty(myArgv[0])) continue;
+			if (is_empty(myArgv[0]))
+				continue;
 			// check for trailing ampersand
-			if(strchr(myArgv[newArgc-1],'&') != NULL && strlen(strchr(myArgv[newArgc-1],'&')) == 1) {
+			if (strchr(myArgv[newArgc - 1], '&') != NULL
+					&& strlen(strchr(myArgv[newArgc - 1], '&')) == 1) {
 				if (strlen(myArgv[newArgc - 1]) != 1) {
 					// remove trailing ampersand if on last arg
 					myArgv[newArgc - 1][strlen(myArgv[newArgc - 1]) - 1] = 0;
@@ -189,7 +192,7 @@ int P1_shellTask(int argc, char* argv[])
 			// malloc argv stuff.
 			newArgv = (char**) malloc(sizeof(char*) * newArgc);
 			int z;
-			for (z = 0; z < newArgc ; z++) {
+			for (z = 0; z < newArgc; z++) {
 				newArgv[z] = malloc((strlen(myArgv[z]) + 1) * sizeof(char));
 				strcpy(newArgv[z], myArgv[z]);
 				// printf("newArgv[%d] = '%s'\n", z, newArgv[z]);
@@ -197,66 +200,59 @@ int P1_shellTask(int argc, char* argv[])
 		}	// ?? >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 		SWAP
 		// look for command
-		for (found = i = 0; i < NUM_COMMANDS; i++)
-		{
-			char newArgvInsensitive[sizeof(newArgv[0])/sizeof(char)];
-			strcpy(newArgvInsensitive,newArgv[0]);
+		for (found = i = 0; i < NUM_COMMANDS; i++) {
+			char newArgvInsensitive[sizeof(newArgv[0]) / sizeof(char)];
+			strcpy(newArgvInsensitive, newArgv[0]);
 			int j;
-			for(j = 0; newArgvInsensitive[j]; j++){
+			for (j = 0; newArgvInsensitive[j]; j++) {
 				newArgvInsensitive[j] = tolower(newArgvInsensitive[j]);
 			}
-			if (!strcmp(newArgvInsensitive, commands[i]->command) ||
-					!strcmp(newArgvInsensitive, commands[i]->shortcut))
-			{
+			if (!strcmp(newArgvInsensitive, commands[i]->command)
+					|| !strcmp(newArgvInsensitive, commands[i]->shortcut)) {
 				// command found
-				if(newTask) {
-					createTask(&(*commands[i]->description),
-							&(*commands[i]->func),
-							MED_PRIORITY,
-							newArgc,
-							newArgv);
+				if (newTask) {
+					createTask(&(*commands[i]->description), &(*commands[i]->func), MED_PRIORITY,
+							newArgc, newArgv);
 				} else {
 					int retValue = (*commands[i]->func)(newArgc, newArgv);
-					if (retValue) printf("\nCommand Error %d", retValue);
+					if (retValue)
+						printf("\nCommand Error %d", retValue);
 				}
 				found = TRUE;
 				break;
 			}
 		}
-		if (!found)	printf("\nInvalid command %s.",newArgv[0]);
+		if (!found)
+			printf("\nInvalid command %s.", newArgv[0]);
 		SWAP
 		// ?? free up any malloc'd argv parameters
 		int z;
-		for (z = 0; z < newArgc ; z++) {
+		for (z = 0; z < newArgc; z++) {
 			free(newArgv[z]);
 		}
 		free(newArgv);
-		for (i=0; i<INBUF_SIZE; i++) inBuffer[i] = 0;
+		for (i = 0; i < INBUF_SIZE; i++)
+			inBuffer[i] = 0;
 	}
 	freeHistory();
 	return 0;						// terminate task
 } // end P1_shellTask
 
-
-void mySIGINTHandler(void)
-{
+void mySIGINTHandler(void) {
 	sigSignal(-1, mySIGTERM);
 	return;
 }
 
-void mySIGTSTPHandler(void)
-{
+void mySIGTSTPHandler(void) {
 	sigSignal(-1, mySIGSTOP);
 	return;
 }
 
-void mySIGCONTHandler(void)
-{
+void mySIGCONTHandler(void) {
 	return;
 }
 
-void mySIGTERMHandler(void)
-{
+void mySIGTERMHandler(void) {
 	killTask(curTask);
 }
 
@@ -264,26 +260,22 @@ void mySIGTERMHandler(void)
 // ***********************************************************************
 // P1 Project
 //
-int P1_project1(int argc, char* argv[])
-{
-	SWAP										// do context switch
+int P1_project1(int argc, char* argv[]) {
+	SWAP
+	// do context switch
 
 	return 0;
 } // end P1_project1
-
-
 
 // ***********************************************************************
 // ***********************************************************************
 // quit command
 //
-int P1_quit(int argc, char* argv[])
-{
+int P1_quit(int argc, char* argv[]) {
 	int i;
 
 	// free P1 commands
-	for (i = 0; i < NUM_COMMANDS; i++)
-	{
+	for (i = 0; i < NUM_COMMANDS; i++) {
 		free(commands[i]->command);
 		free(commands[i]->shortcut);
 		free(commands[i]->description);
@@ -296,15 +288,12 @@ int P1_quit(int argc, char* argv[])
 	return 0;
 } // end P1_quit
 
-
-
 // **************************************************************************
 // **************************************************************************
 // lc3 command
 //
-int P1_lc3(int argc, char* argv[])
-{
-	strcpy (argv[0], "0");
+int P1_lc3(int argc, char* argv[]) {
+	strcpy(argv[0], "0");
 	return lc3Task(argc, argv);
 } // end P1_lc3
 
@@ -312,9 +301,8 @@ int P1_lc3(int argc, char* argv[])
 // **************************************************************************
 // add command
 //
-int P1_add(int argc, char* argv[])
-{
-	if(argc <= 1) {
+int P1_add(int argc, char* argv[]) {
+	if (argc <= 1) {
 		printf("\nUsage: add NUMBERS...\nAdd together all NUMBER(s)"
 				" in decimal or hex format.");
 		return 0;
@@ -322,18 +310,18 @@ int P1_add(int argc, char* argv[])
 	SWAP
 	int i;
 	int answer = 0;
-	for ( i = 1 ; i < argc ; i++) {
+	for (i = 1; i < argc; i++) {
 		int toAdd = 0;
-		if(argv[i][0] == '0' && argv[i][1] == 'x') {
+		if (argv[i][0] == '0' && argv[i][1] == 'x') {
 			// hex
-			toAdd = (int)strtol(argv[i], NULL, 0);
+			toAdd = (int) strtol(argv[i], NULL, 0);
 		} else {
 			// decimal
 			toAdd = atoi(argv[i]);
 		}
 		answer += toAdd;
 	}
-	printf("\n\tAnswer = %d",answer);
+	printf("\n\tAnswer = %d", answer);
 	return 0;
 } // end P1_add
 
@@ -341,16 +329,15 @@ int P1_add(int argc, char* argv[])
 // **************************************************************************
 // args command
 //
-int P1_args(int argc, char* argv[])
-{
-	if(argc <= 1) {
+int P1_args(int argc, char* argv[]) {
+	if (argc <= 1) {
 		printf("\nUsage: args ARUMENTS...\nLists argument(s).");
 		return 0;
 	}
 	SWAP
 	int i;
-	for ( i = 1 ; i < argc ; i++) {
-		printf("\n\tArgument [%d] - %s",i,argv[i]);
+	for (i = 1; i < argc; i++) {
+		printf("\n\tArgument [%d] - %s", i, argv[i]);
 	}
 	return 0;
 } // end P1_args
@@ -359,10 +346,9 @@ int P1_args(int argc, char* argv[])
 // **************************************************************************
 // date_time command
 //
-int P1_date_time(int argc, char* argv[])
-{
-	if(argc != 1) {
-		if(argv[0][0] == 'd')
+int P1_date_time(int argc, char* argv[]) {
+	if (argc != 1) {
+		if (argv[0][0] == 'd')
 			printf("\nUsage: date\nOutput current system date and time.");
 		else
 			printf("\nUsage: time\nOutput current system date and time.");
@@ -371,7 +357,7 @@ int P1_date_time(int argc, char* argv[])
 	SWAP
 	char * time = malloc(sizeof(char) * INBUF_SIZE);
 	myTime(time);
-	printf("\n\tThe current time is: %s",time);
+	printf("\n\tThe current time is: %s", time);
 	free(time);
 	return 0;
 } // end P1_date_time
@@ -380,34 +366,34 @@ int P1_date_time(int argc, char* argv[])
 // ***********************************************************************
 // help command
 //
-int P1_help(int argc, char* argv[])
-{
+int P1_help(int argc, char* argv[]) {
 	int i;
-	if(argc==1) {
+	if (argc == 1) {
 		// list commands
-		for (i = 0; i < NUM_COMMANDS; i++)
-		{
-			SWAP										// do context switch
+		for (i = 0; i < NUM_COMMANDS; i++) {
+			SWAP
+			// do context switch
 			if (strstr(commands[i]->description, ":"))
 				printf("\n%s", commands[i]->description);
 			else
 				printf("\n\t%4s: %s", commands[i]->shortcut, commands[i]->description);
 		}
-	} else if(argc == 2){
+	} else if (argc == 2) {
 		int proj = atoi(argv[1]);
 		if (proj <= 0 || proj >= 7) {
 			printf("\nError, project not found.");
-			printf("\nUsage: help [PROJECT]\nList help topics for a projct (default is all projects).");
+			printf(
+					"\nUsage: help [PROJECT]\nList help topics for a projct (default is all projects).");
 			return 0;
 		}
 		char * theProj = malloc(sizeof(char) * 5);
-		sprintf(theProj,"P%d:",proj);
+		sprintf(theProj, "P%d:", proj);
 		char * theProjEnd = malloc(sizeof(char) * 5);
-		sprintf(theProjEnd,"P%d:",proj+1);
+		sprintf(theProjEnd, "P%d:", proj + 1);
 		bool started = FALSE;
-		for (i = 0; i < NUM_COMMANDS; i++)
-		{
-			SWAP										// do context switch
+		for (i = 0; i < NUM_COMMANDS; i++) {
+			SWAP
+			// do context switch
 			if (!started && !strstr(commands[i]->description, theProj)) {
 				continue;
 			}
@@ -422,43 +408,40 @@ int P1_help(int argc, char* argv[])
 		}
 		free(theProj);
 	} else {
-		printf("\nUsage: help [PROJECT]\nList help topics for a projct (default is all projects).");
+		printf(
+				"\nUsage: help [PROJECT]\nList help topics for a projct (default is all projects).");
 	}
 	return 0;
 } // end P1_help
-
 
 // ***********************************************************************
 // ***********************************************************************
 // initialize shell commands
 //
-Command* newCommand(char* command, char* shortcut, int (*func)(int, char**), char* description)
-{
+Command* newCommand(char* command, char* shortcut, int (*func)(int, char**), char* description) {
 	Command* cmd = (Command*) malloc(sizeof(Command));
 
 	// get long command
-	cmd->command = (char*)malloc(strlen(command) + 1);
+	cmd->command = (char*) malloc(strlen(command) + 1);
 	strcpy(cmd->command, command);
 
 	// get shortcut command
-	cmd->shortcut = (char*)malloc(strlen(shortcut) + 1);
+	cmd->shortcut = (char*) malloc(strlen(shortcut) + 1);
 	strcpy(cmd->shortcut, shortcut);
 
 	// get function pointer
 	cmd->func = func;
 
 	// get description
-	cmd->description = (char*)malloc(strlen(description) + 1);
+	cmd->description = (char*) malloc(strlen(description) + 1);
 	strcpy(cmd->description, description);
 
 	return cmd;
 } // end newCommand
 
-
-Command** P1_init()
-{
-	int i  = 0;
-	Command** commands = (Command**)malloc(sizeof(Command*) * NUM_COMMANDS);
+Command** P1_init() {
+	int i = 0;
+	Command** commands = (Command**) malloc(sizeof(Command*) * NUM_COMMANDS);
 
 	// system
 	commands[i++] = newCommand("quit", "q", P1_quit, "Quit");
@@ -470,8 +453,10 @@ Command** P1_init()
 	commands[i++] = newCommand("help", "he", P1_help, "OS345 Help");
 	commands[i++] = newCommand("lc3", "lc3", P1_lc3, "Execute LC3 program");
 	commands[i++] = newCommand("add", "add", P1_add, "Add all arguments together");
-	commands[i++] = newCommand("args", "ar", P1_args, "List all parameters on the command line, numbers or strings.");
-	commands[i++] = newCommand("date", "time", P1_date_time, "Output current system date and time.");
+	commands[i++] = newCommand("args", "ar", P1_args,
+			"List all parameters on the command line, numbers or strings.");
+	commands[i++] = newCommand("date", "time", P1_date_time,
+			"Output current system date and time.");
 
 	// P2: Tasking
 	commands[i++] = newCommand("project2", "p2", P2_project2, "P2: Tasking");

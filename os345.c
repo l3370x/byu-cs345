@@ -80,6 +80,7 @@ int superMode;                                                  // system mode
 int curTask;                                                    // current task #
 long swapCount;                                         // number of re-schedule cycles
 char inChar;                                                    // last entered character
+int inBufIndx;						// input pointer into input buffer
 int charFlag;                                                   // 0 => buffered input
 int inBufPtr;                                                   // input pointer into input buffer
 char inBuffer[INBUF_SIZE];                      // character input buffer
@@ -117,32 +118,34 @@ void initializeHistory() {
 	historyViewer = 0;
 	prevArgs = (char**) malloc(sizeof(char*) * HISTORY_MAX);
 	int z;
-	for (z = 0; z < HISTORY_MAX ; z++) {
+	for (z = 0; z < HISTORY_MAX; z++) {
 		prevArgs[z] = malloc((INBUF_SIZE + 1) * sizeof(char));
 	}
-	for (z=0; z<INBUF_SIZE; z++) blankBuffer[z] = 0;
+	for (z = 0; z < INBUF_SIZE; z++)
+		blankBuffer[z] = 0;
 }
 
 void freeHistory() {
 	int z;
-	for (z = 0; z < HISTORY_MAX ; z++) {
+	for (z = 0; z < HISTORY_MAX; z++) {
 		free(prevArgs[z]);
 	}
 	free(prevArgs);
 }
 
 void saveCommandInHistory(char * command) {
-	if(historyIndex >= HISTORY_MAX) {		// shift history back one to replace old entries.
+	if (historyIndex >= HISTORY_MAX) {		// shift history back one to replace old entries.
 		int j;
-		for ( j = 0 ; j < HISTORY_MAX ; j++) {
+		for (j = 0; j < HISTORY_MAX; j++) {
 			int i;
-			for (i=0; i<INBUF_SIZE; i++) prevArgs[j][i] = 0;
-			if(j != (HISTORY_MAX - 1))
-				strcpy(prevArgs[j],prevArgs[j+1]);
+			for (i = 0; i < INBUF_SIZE; i++)
+				prevArgs[j][i] = 0;
+			if (j != (HISTORY_MAX - 1))
+				strcpy(prevArgs[j], prevArgs[j + 1]);
 		}
 		historyIndex = historyIndex - 1;
 	}
-	strcpy(prevArgs[historyIndex],command);
+	strcpy(prevArgs[historyIndex], command);
 	historyIndex = historyIndex + 1;
 	historyViewer = historyIndex;
 }
@@ -157,30 +160,30 @@ void saveCommandInHistory(char * command) {
 // 4. Create CLI task
 // 5. Enter scheduling/idle loop
 //
-int main(int argc, char* argv[]) {       //printf("firstline\n");
-// All the 'powerDown' invocations must occur in the 'main'
-// context in order to facilitate 'killTask'.  'killTask' must
-// free any stack memory associated with current known tasks.  As
-// such, the stack context must be one not associated with a task.
-// The proper method is to longjmp to the 'reset_context' that
-// restores the stack for 'main' and then invoke the 'powerDown'
-// sequence.
+int main(int argc, char* argv[]) {
+	// All the 'powerDown' invocations must occur in the 'main'
+	// context in order to facilitate 'killTask'.  'killTask' must
+	// free any stack memory associated with current known tasks.  As
+	// such, the stack context must be one not associated with a task.
+	// The proper method is to longjmp to the 'reset_context' that
+	// restores the stack for 'main' and then invoke the 'powerDown'
+	// sequence.
 
 	// save context for restart (a system reset would return here...)
 	int resetCode = setjmp(reset_context);
-	superMode = TRUE;                                                       // supervisor mode
-	printf("\nResetCode %d\n", resetCode);
+	superMode = TRUE;						// supervisor mode
+
 	switch (resetCode) {
-	case POWER_DOWN_QUIT:                           // quit
+	case POWER_DOWN_QUIT:				// quit
 		powerDown(0);
 		printf("\nGoodbye!!");
 		return 0;
 
-	case POWER_DOWN_RESTART:                        // restart
+	case POWER_DOWN_RESTART:			// restart
 		powerDown(resetCode);
 		printf("\nRestarting system...\n");
 
-	case POWER_UP:                  // startup   here is the place that when we start from code 0.
+	case POWER_UP:						// startup
 		break;
 
 	default:
@@ -190,7 +193,7 @@ int main(int argc, char* argv[]) {       //printf("firstline\n");
 	}
 
 	// output header message
-	printf("%s", STARTUP_MSG);                                                  //as CS345 F2009
+	printf("%s", STARTUP_MSG);
 
 	// initalize OS
 	initOS();
@@ -203,19 +206,17 @@ int main(int argc, char* argv[]) {       //printf("firstline\n");
 	keyboard = createSemaphore("keyboard", BINARY, 1);
 	tics1sec = createSemaphore("tics1sec", BINARY, 0);
 	tics10thsec = createSemaphore("tics10thsec", BINARY, 0);
-	tics10sec = createSemaphore("tics10sec", 1, 0);
+	tics10sec = createSemaphore("tics10sec", COUNTING, 0);
 	mutex = createSemaphore("mutex", BINARY, 1);
-	//s1Sem=createSemaphore("s1Sem", BINARY, 0);
-	//s2Sem=createSemaphore("s2Sem", BINARY, 0);
+
 	//?? ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 	// schedule CLI task
-	createTask("myShell",           // task name
-			P1_shellTask,   // task
-			MED_PRIORITY,   // task priority
-			argc,                           // task arg count
-			argv);                  // task argument pointers
-	enque(rq, 0, &taskCount);
+	createTask("myShell",			// task name
+			P1_shellTask,			// task
+			MED_PRIORITY,			// task priority
+			argc,					// task arg count
+			argv);					// task argument pointers
 
 	// HERE WE GO................
 
@@ -225,7 +226,7 @@ int main(int argc, char* argv[]) {       //printf("firstline\n");
 	// 3. Dispatch task
 	// 4. Loop (forever!)
 
-	while (1)                                                                   // scheduling loop
+	while (1)									// scheduling loop
 	{
 		// check for character / timer interrupts
 		pollInterrupts();
@@ -233,12 +234,12 @@ int main(int argc, char* argv[]) {       //printf("firstline\n");
 		// schedule highest priority ready task
 		if ((curTask = scheduler()) < 0)
 			continue;
-//              printf("curtask:state  %d:%d",curTask,tcb[curTask].state);
 
 		// dispatch curTask, quit OS if negative return
 		if (dispatcher(curTask) < 0)
 			break;
-	}                                                                    // end of scheduling loop
+
+	}											// end of scheduling loop
 
 	// exit os
 	longjmp(reset_context, POWER_DOWN_QUIT);
@@ -252,85 +253,108 @@ static void keyboard_isr() {
 	// assert system mode
 	assert("keyboard_isr Error" && superMode);
 
-	semSignal(charReady);                                   // SIGNAL(charReady) (No Swap)
+	semSignal(charReady);					// SIGNAL(charReady) (No Swap)
 	if (charFlag == 0) {
 		switch (inChar) {
 		case '\r':
 		case '\n': {
-			push();
-			inBufPtr = 0;                                   // EOL, signal line ready
-			semSignal(inBufferReady);       // SIGNAL(inBufferReady)
+			inBufIndx = 0;				// EOL, signal line ready
+			semSignal(inBufferReady);	// SIGNAL(inBufferReady)
 			break;
 		}
-
-		case 0x18:                                                      // ^x
+		case 0x06:						// ^F
+		case 0x04:						// ^D
 		{
-
-			inBufPtr = 0;
-			inBuffer[0] = 0;
-			sigSignal(0, mySIGINT);         // interrupt task 0
-			semSignal(inBufferReady);       // SEM_SIGNAL(inBufferReady)
-			break;
-		}
-		case 0x17:             //ctrl+w
-		{
-			sigSignal(-1, mySIGTSTP);
-			inBufPtr = 0;
-			inBuffer[0] = 0;
-			semSignal(inBufferReady);       // SEM_SIGNAL(inBufferReady)
-			break;
-		}
-		case 0x12:              //ctrl+r
-		{
-			sigSignal(-1, mySIGCONT);
+			char * toShow = malloc(sizeof(char) * INBUF_SIZE);
 			int i;
-			for (i = 0; i < MAX_TASKS; i++) {
-				if (tcb[i].signal & mySIGTSTP) {
-					tcb[i].signal = 0;
+			if (inChar == 0x04) {
+				if (historyViewer <= 0) {						// history empty
+					for (i = 0; i < INBUF_SIZE; i++)
+						toShow[i] = 0;		// clear toShow
+					free(toShow);
+					break;
 				}
-
-				if (tcb[i].signal & mySIGSTOP) {
-					tcb[i].signal = 0;
+				strcpy(toShow, prevArgs[historyViewer - 1]);	// copy one back
+				historyViewer = historyViewer - 1;
+				if (historyViewer <= 0) {
+					historyViewer = 0;						// assert cant push index
+				}											// out of bounds (below 0)
+			} else {
+				if (historyViewer >= historyIndex - 1) {	// assert cant go into future history
+					for (i = 0; i < INBUF_SIZE; i++)
+						toShow[i] = 0;		// clear toShow
+					free(toShow);
+					break;
 				}
+				strcpy(toShow, prevArgs[historyViewer + 1]);		// copy one forward
+				historyViewer = historyViewer + 1;
 			}
-			inBufPtr = 0;
-			inBuffer[0] = 0;
-			semSignal(inBufferReady);       // SEM_SIGNAL(inBufferReady)
+			int oldLen = strlen(inBuffer);
+			for (i = 0; i < INBUF_SIZE; i++)
+				inBuffer[i] = 0;	// clear inBuffer
+			strcpy(inBuffer, toShow);						// set inBuffer
+			inBufIndx = strlen(inBuffer) - 1;				// set inBufIndx
+			for (i = 0; i <= oldLen + 2; i++)
+				blankBuffer[i] = ' '; // hide old buffer with spaces.
+			printf("\r%s", blankBuffer);						// clear stdout
+			printf("\r%ld>>%s", swapCount - 1, toShow);		// print history
+			for (i = 0; i < INBUF_SIZE; i++)
+				toShow[i] = 0;		// clear toShow
+			for (i = 0; i < strlen(inBuffer); i++)
+				blankBuffer[i] = 0;
+			free(toShow);
+
 			break;
 		}
-		case 0x08:              //backspace  ctrl+h
+		case 0x12:						// ^R
 		{
-			if (inBufPtr > 0 && inBufPtr < 255) {
-
-				inBuffer[inBufPtr - 1] = 0;
-				inBufPtr--;
-				fflush(stdout);
-				printf("\b%c\b", ' ');
+			inBufIndx = 0;
+			inBuffer[0] = 0;
+			sigSignal(-1, mySIGCONT);	// send mySIGCONT to all tasks
+			int taskId;
+			for (taskId = 0; taskId < MAX_TASKS; taskId++) {
+				if (tcb[taskId].signal & mySIGTSTP)
+					tcb[taskId].signal &= ~mySIGTSTP;
+				if (tcb[taskId].signal & mySIGSTOP)
+					tcb[taskId].signal &= ~mySIGSTOP;
 			}
 			break;
 		}
-		case 0x48: {
-			//printf("up arrow");
-			pop();
+		case 0x17:						// ^w
+		{
+			inBufIndx = 0;
+			inBuffer[0] = 0;
+			sigSignal(-1, mySIGTSTP);	// send mySIGTSTP to all tasks
+			break;
+		}
+		case 0x18:						// ^x
+		{
+			inBufIndx = 0;
+			inBuffer[0] = 0;
+			sigSignal(0, mySIGINT);		// interrupt task 0
+			break;
+		}
+
+		case 0x08:
+		case 0x7f: {
+			if (inBufIndx > 0) {
+				inBufIndx--;
+				inBuffer[inBufIndx] = 0;
+				printf("\b \b");
+			}
 			break;
 		}
 
 		default: {
-
-			if (inBufPtr >= 0 && inBufPtr < 255) {
-				//if(inChar!=0x22&&inChar!=0x27)
-				{
-					inBuffer[inBufPtr++] = inChar;
-					inBuffer[inBufPtr] = 0;
-				}
-				printf("%c", inChar);           // echo character
-			}
+			inBuffer[inBufIndx++] = inChar;
+			inBuffer[inBufIndx] = 0;
+			printf("%c", inChar);		// echo character
 		}
 		}
 	} else {
 		// single character mode
-		inBufPtr = 0;
-		inBuffer[inBufPtr] = 0;
+		inBufIndx = 0;
+		inBuffer[inBufIndx] = 0;
 	}
 	return;
 } // end keyboard_isr
@@ -341,13 +365,13 @@ static void keyboard_isr() {
 static void timer_isr() {
 	time_t currentTime;                                             // current time
 
-	// assert system mode
+// assert system mode
 	assert("timer_isr Error" && superMode);
 
-	// capture current time
+// capture current time
 	time(&currentTime);
 
-	// one second timer
+// one second timer
 	if ((currentTime - oldTime1) >= 1) {
 		// signal 1 second
 		semSignal(tics1sec);
@@ -355,7 +379,7 @@ static void timer_isr() {
 
 	}
 
-	// sample fine clock
+// sample fine clock
 	myClkTime = clock();
 	if ((myClkTime - myOldClkTime) >= ONE_TENTH_SEC) {
 		if (dcRefresh() == 1) {
@@ -367,7 +391,7 @@ static void timer_isr() {
 		}
 	}
 
-	// ?? add other timer sampling/signaling code here for project 2
+// ?? add other timer sampling/signaling code here for project 2
 	myClkTime2 = clock();
 	if ((myClkTime2 - myOldClkTime2) >= TEN_SEC) {       //printf("shell%d %d",rq[0],rq[1]);
 		myOldClkTime2 = myOldClkTime2 + TEN_SEC;   // update old
@@ -384,17 +408,17 @@ static void timer_isr() {
 // simulate asynchronous interrupts by polling events during idle loop
 //
 static void pollInterrupts(void) {
-	// check for task monopoly
+// check for task monopoly
 	pollClock = clock();
 	assert("Timeout" && ((pollClock - lastPollClock) < MAX_CYCLES));
 	lastPollClock = pollClock;
 
-	// check for keyboard interrupt
+// check for keyboard interrupt
 	if ((inChar = GET_CHAR) > 0) {
 		keyboard_isr();
 	}
 
-	// timer interrupt
+// timer interrupt
 	timer_isr();
 
 	return;
@@ -406,41 +430,41 @@ static void pollInterrupts(void) {
 //
 static int scheduler() {
 	int nextTask;
-	// ?? Design and implement a scheduler that will select the next highest
-	// ?? priority ready task to pass to the system dispatcher.
+// ?? Design and implement a scheduler that will select the next highest
+// ?? priority ready task to pass to the system dispatcher.
 
-	// ?? WARNING: You must NEVER call swapTask() from within this function
-	// ?? or any function that it calls.  This is because swapping is
-	// ?? handled entirely in the swapTask function, which, in turn, may
-	// ?? call this function.  (ie. You would create an infinite loop.)
+// ?? WARNING: You must NEVER call swapTask() from within this function
+// ?? or any function that it calls.  This is because swapping is
+// ?? handled entirely in the swapTask function, which, in turn, may
+// ?? call this function.  (ie. You would create an infinite loop.)
 
-	// ?? Implement a round-robin, preemptive, prioritized scheduler.
+// ?? Implement a round-robin, preemptive, prioritized scheduler.
 
-	// ?? This code is simply a round-robin scheduler and is just to get
-	// ?? you thinking about scheduling.  You must implement code to handle
-	// ?? priorities, clean up dead tasks, and handle semaphores appropriately.
+// ?? This code is simply a round-robin scheduler and is just to get
+// ?? you thinking about scheduling.  You must implement code to handle
+// ?? priorities, clean up dead tasks, and handle semaphores appropriately.
 
-	// schedule next task
-	//nextTask = ++curTask;
+// schedule next task
+//nextTask = ++curTask;
 
-	//printf("%d",curTask);
+//printf("%d",curTask);
 	/*for(int i=0;i<MAX_TASKS;i++)
 	 {
 	 if(tcb[i].name&&tcb[i].state<2)
 	 enque(rq,i,&taskCount);
 	 }*/
-	//if(taskCount==2)
-	//printf("\nrq1: %d%d%d",taskCount,rq[0],rq[1]);
-	//if(taskCount==2)
-	//printf("\nrq2: %d%d%d",taskCount,rq[0],rq[1]);
+//if(taskCount==2)
+//printf("\nrq1: %d%d%d",taskCount,rq[0],rq[1]);
+//if(taskCount==2)
+//printf("\nrq2: %d%d%d",taskCount,rq[0],rq[1]);
 	nextTask = deque(rq, -1, &taskCount);
 	if (nextTask >= 0)
 		enque(rq, nextTask, &taskCount);
 
-	//if(taskCount==1)
-	//printf("\nrq3:%d%d%d",taskCount,nextTask,rq[0]);
-	// mask sure nextTask is valid
-	//while (!tcb[nextTask].name)
+//if(taskCount==1)
+//printf("\nrq3:%d%d%d",taskCount,nextTask,rq[0]);
+// mask sure nextTask is valid
+//while (!tcb[nextTask].name)
 	{
 		//if (++nextTask >= MAX_TASKS) nextTask = 0;
 		//if (nextTask == -1) nextTask = 0;
@@ -449,7 +473,7 @@ static int scheduler() {
 
 	if (tcb[nextTask].signal & mySIGSTOP)
 		return -1;
-	//if (tcb[nextTask].signal & mySIGSTOP) tcb[nextTask].signal & ~mySIGSTOP;
+//if (tcb[nextTask].signal & mySIGSTOP) tcb[nextTask].signal & ~mySIGSTOP;
 
 	return nextTask;
 } // end scheduler
@@ -460,9 +484,9 @@ static int scheduler() {
 //
 static int dispatcher(int curTask) {
 	int result;
-	//if(curTask==1)
-	//printf("dispather1%d",tcb[curTask].state);
-	// schedule task
+//if(curTask==1)
+//printf("dispather1%d",tcb[curTask].state);
+// schedule task
 	switch (tcb[curTask].state) {
 	case S_NEW: {
 		// new task
@@ -570,23 +594,23 @@ static int dispatcher(int curTask) {
 
 void swapTask() {
 	assert("SWAP Error" && !superMode);
-	// assert user mode
+// assert user mode
 
-	// increment swap cycle counter
+// increment swap cycle counter
 	swapCount++;
 
-	// either save current task context or schedule task (return)
+// either save current task context or schedule task (return)
 	if (setjmp(tcb[curTask].context)) {
 		superMode = FALSE;                                      // user mode
 		return;
 	}
 
-	// context switch - move task state to ready
+// context switch - move task state to ready
 	if (tcb[curTask].state == S_RUNNING)
 		tcb[curTask].state = S_READY;
-	//enque(rq,curTask,&taskCount);
-	//printf("rq:%d%d",rq[0],rq[1]);
-	// move to kernel mode (reschedule)
+//enque(rq,curTask,&taskCount);
+//printf("rq:%d%d",rq[0],rq[1]);
+// move to kernel mode (reschedule)
 	longjmp(k_context, 2);
 } // end swapTask
 
@@ -602,10 +626,10 @@ void swapTask() {
 static void initOS() {
 	int i;
 
-	// make any system adjustments (for unblocking keyboard inputs)
+// make any system adjustments (for unblocking keyboard inputs)
 	INIT_OS
 
-	// reset system variables
+// reset system variables
 	curTask = 0;                                            // current task #
 	swapCount = 0;                                          // number of scheduler cycles
 	inChar = 0;                                                     // last entered character
@@ -614,39 +638,39 @@ static void initOS() {
 	semaphoreList = 0;                              // linked list of active semaphores
 	diskMounted = 0;                                        // disk has been mounted
 
-	//recallable command history
+//recallable command history
 	lastCommand = 0;
 	history = (char **) malloc(5 * sizeof(char*));
 	for (i = 0; i < 5; i++) {
 		history[i] = NULL;
 	}
-	// malloc ready queue
-	//rq = (int*)malloc(MAX_TASKS * sizeof(int));
+// malloc ready queue
+//rq = (int*)malloc(MAX_TASKS * sizeof(int));
 	iniq(rq, &taskCount);
-	// capture current time
+// capture current time
 	lastPollClock = clock();                // last pollClock
 	time(&oldTime1);
 
-	// init system tcb's
+// init system tcb's
 	for (i = 0; i < MAX_TASKS; i++) {
 		tcb[i].name = NULL;                     // tcb
 		taskSems[i] = NULL;                     // task semaphore
 	}
 
-	// initalize message buffers
+// initalize message buffers
 	for (i = 0; i < NUM_MESSAGES; i++) {
 		messages[i].to = -1;
 	}
 
-	// init tcb
+// init tcb
 	for (i = 0; i < MAX_TASKS; i++) {
 		tcb[i].name = NULL;
 	}
 
-	// initialize lc-3 memory
+// initialize lc-3 memory
 	initLC3Memory(LC3_MEM_FRAME, 0xF800 >> 6);
 
-	// ?? initialize all execution queues
+// ?? initialize all execution queues
 
 	return;
 } // end initOS
@@ -658,23 +682,23 @@ void powerDown(int code) {
 	int i;
 	printf("\nPowerDown Code %d", code);
 
-	// release all system resources.
+// release all system resources.
 	printf("\nRecovering Task Resources...");
 
-	// kill all tasks
+// kill all tasks
 	for (i = MAX_TASKS - 1; i >= 0; i--)
 		if (tcb[i].name)
 			sysKillTask(i);
 
-	// delete all semaphores
+// delete all semaphores
 	while (semaphoreList)
 		deleteSemaphore(&semaphoreList);
 
-	// free ready queue
-	//free(rq);
+// free ready queue
+//free(rq);
 
-	// ?? release any other system resources
-	// ?? deltaclock (project 3)
+// ?? release any other system resources
+// ?? deltaclock (project 3)
 
 	RESTORE_OS
 	return;
@@ -717,7 +741,7 @@ int sigAction(void (*sigHandler)(void), int sig) {
 //      sig = signal
 //
 int sigSignal(int taskId, int sig) {
-	// check for task
+// check for task
 	if ((taskId >= 0) && tcb[taskId].name) {
 		tcb[taskId].signal |= sig;
 		return 0;
@@ -728,7 +752,7 @@ int sigSignal(int taskId, int sig) {
 		}
 		return 0;
 	}
-	// error
+// error
 	return 1;
 }
 
@@ -768,7 +792,7 @@ void defaultSigTermHandler(void) {
 void defaultSigTstpHandler(void) {
 	printf("%s", "\nTstp");
 	sigSignal(-1, mySIGSTOP);
-	//tcb[curTask].state=3;
+//tcb[curTask].state=3;
 	return;
 }
 // **********************************************************************
@@ -781,9 +805,9 @@ int createTask(char* name,                                              // task 
 		char* argv[])                                   // task argument pointers
 {
 	int tid;
-	//taskCount++;
-	// find an open tcb entry slot
-	//printf("create task");
+//taskCount++;
+// find an open tcb entry slot
+//printf("create task");
 	for (tid = 0; tid < MAX_TASKS; tid++) {
 		if (tcb[tid].name == 0) {
 			char buf[8];
@@ -849,7 +873,7 @@ int createTask(char* name,                                              // task 
 			return tid;                                              // return tcb index (curTask)
 		}
 	}
-	// tcb full!
+// tcb full!
 	return -1;
 } // end createTask
 
@@ -896,7 +920,7 @@ static void exitTask(int taskId) {
 // 3. set state to exit
 
 // ?? add code here...
-	//deque(rq,taskId);
+//deque(rq,taskId);
 	tcb[taskId].state = S_EXIT; // EXIT task state
 
 	return;
@@ -909,14 +933,14 @@ static int sysKillTask(int taskId) {
 	Semaphore* sem = semaphoreList;
 	Semaphore** semLink = &semaphoreList;
 	printf("task %d super%d \n ", taskId, superMode);
-	// assert that you are not pulling the rug out from under yourself!
+// assert that you are not pulling the rug out from under yourself!
 	assert("sysKillTask Error" && tcb[taskId].name && superMode);
 	printf("\nKill Task %s", tcb[taskId].name);
 
-	// signal task terminated
+// signal task terminated
 	semSignal(taskSems[taskId]);
 
-	// look for any semaphores created by this task
+// look for any semaphores created by this task
 	while (sem = *semLink) {
 		if (sem->taskNum == taskId) {
 			// semaphore found, delete from list, release memory
@@ -927,7 +951,7 @@ static int sysKillTask(int taskId) {
 		}
 	}
 
-	// ?? delete task from system queues
+// ?? delete task from system queues
 	if (tcb[taskId].state != 3) {
 		deque(rq, taskId, &taskCount);
 	} else if (tcb[taskId].event != 0) {
@@ -953,10 +977,10 @@ static int sysKillTask(int taskId) {
 //
 void semSignal(Semaphore* s) {       //printf("semsignal%s  %d",s->name,s->taskCount);
 	int i;
-	// assert there is a semaphore and it is a legal type
+// assert there is a semaphore and it is a legal type
 	assert("semSignal Error" && s && ((s->type == 0) || (s->type == 1)));
 
-	// check semaphore type
+// check semaphore type
 	if (s->type == 0) {
 		// binary semaphore
 		// look through tasks for one suspended on this semaphore
@@ -1024,13 +1048,13 @@ void semSignal(Semaphore* s) {       //printf("semsignal%s  %d",s->name,s->taskC
 //
 int semWait(Semaphore* s) {
 	assert("semWait Error" && s);
-	// assert semaphore
+// assert semaphore
 	assert("semWait Error" && ((s->type == 0) || (s->type == 1)));
-	// assert legal type
+// assert legal type
 	assert("semWait Error" && !superMode);
-	// assert user mode
+// assert user mode
 
-	// check semaphore type
+// check semaphore type
 	if (s->type == 0) {
 		// binary semaphore
 		// if state is zero, then block task
@@ -1097,13 +1121,13 @@ int semWait(Semaphore* s) {
 //
 int semTryLock(Semaphore* s) {
 	assert("semTryLock Error" && s);
-	// assert semaphore
+// assert semaphore
 	assert("semTryLock Error" && ((s->type == 0) || (s->type == 1)));
-	// assert legal type
+// assert legal type
 	assert("semTryLock Error" && !superMode);
-	// assert user mode
+// assert user mode
 
-	// check semaphore type
+// check semaphore type
 	if (s->type == 0) {
 		// binary semaphore
 		// if state is zero, then block task
@@ -1144,11 +1168,11 @@ Semaphore* createSemaphore(char* name, int type, int state) {
 	Semaphore* sem = semaphoreList;
 	Semaphore** semLink = &semaphoreList;
 
-	// assert semaphore is binary or counting
+// assert semaphore is binary or counting
 	assert("createSemaphore Error" && ((type == 0) || (type == 1)));
-	// assert type is validate
+// assert type is validate
 
-	// look for duplicate name
+// look for duplicate name
 	while (sem) {
 		if (!strcmp(sem->name, name)) {
 			printf("\nSemaphore %s already defined", sem->name);
@@ -1165,17 +1189,17 @@ Semaphore* createSemaphore(char* name, int type, int state) {
 		sem = (Semaphore*) sem->semLink;
 	}
 
-	// allocate memory for new semaphore
+// allocate memory for new semaphore
 	sem = (Semaphore*) malloc(sizeof(Semaphore));
 
-	// set semaphore values
+// set semaphore values
 	sem->name = (char*) malloc(strlen(name) + 1);
 	strcpy(sem->name, name);                                // semaphore name
 	sem->type = type;                                                      // 0=binary, 1=counting
 	sem->state = state;                                             // initial semaphore state
 	sem->taskNum = curTask;                                 // set parent task #
 
-	// prepend to semaphore list
+// prepend to semaphore list
 	sem->semLink = (struct semaphore*) semaphoreList;
 	semaphoreList = sem;                                            // link into semaphore list
 	iniq(sem->block, &sem->taskCount);
@@ -1190,10 +1214,10 @@ bool deleteSemaphore(Semaphore** semaphore) {
 	Semaphore* sem = semaphoreList;
 	Semaphore** semLink = &semaphoreList;
 
-	// assert there is a semaphore
+// assert there is a semaphore
 	assert("deleteSemaphore Error" && *semaphore);
 
-	// look for semaphore
+// look for semaphore
 	while (sem) {
 		if (sem == *semaphore) {
 			// semaphore found, delete from list, release memory
@@ -1213,7 +1237,7 @@ bool deleteSemaphore(Semaphore** semaphore) {
 		sem = (Semaphore*) sem->semLink;
 	}
 
-	// could not delete
+// could not delete
 	return FALSE;
 } // end deleteSemaphore
 
@@ -1223,7 +1247,7 @@ bool deleteSemaphore(Semaphore** semaphore) {
 //
 int postMessage(int from, int to, char* msg) {
 	int i;
-	// insert message in open slot
+// insert message in open slot
 	for (i = 0; i < NUM_MESSAGES; i++) {
 		if (messages[i].to == -1) {
 			//printf("\n(%d) Send from %d to %d: (%s)", i, from, to, msg);
@@ -1282,7 +1306,7 @@ char* myTime(char* svtime) {
 // malloc for argv
 
 char** copyAg(int argc, char* argv[]) {
-	//printf("\ncopy things");
+//printf("\ncopy things");
 
 	char** argv1;
 	argv1 = (char**) malloc(argc * sizeof(char *));
@@ -1304,7 +1328,7 @@ char** copyAg(int argc, char* argv[]) {
 	 printf("%c'",pt2[i] );
 	 }
 	 */
-	//printf("%s",argv1[0]);
+//printf("%s",argv1[0]);
 	return argv1;
 
 }
@@ -1345,7 +1369,7 @@ void pop() {
 }
 
 void enque(int* queue, int taskId, int* count) {
-	//printf("\nenque1:%d%d",taskId,taskCount);
+//printf("\nenque1:%d%d",taskId,taskCount);
 	int i;
 	for (i = 0; i < (*count); i++) {
 		if (queue[i] == taskId) {
@@ -1357,9 +1381,9 @@ void enque(int* queue, int taskId, int* count) {
 	if ((*count) > 1) {
 		sort(queue, *count);
 	}
-	//printf("%d",*count);
+//printf("%d",*count);
 
-	//printf("\nenque2:%d%d",taskId,taskCount);
+//printf("\nenque2:%d%d",taskId,taskCount);
 }
 
 //-1 for normal, >1 for remove specific taskid
