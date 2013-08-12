@@ -53,7 +53,7 @@ Semaphore* museum;
 Semaphore* gift;
 Semaphore* giftMutex;
 Semaphore* park;
-extern superMode;
+extern int superMode;
 Semaphore* finished;
 // ***********************************************************************
 // project 3 functions and tasks
