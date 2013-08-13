@@ -274,7 +274,7 @@ int P6_mount(int argc, char* argv[])		// mount RAM disk
 
 	assert("64-bit" && (sizeof(DirEntry) == 32));
 
-	if (argc < 2) strcat(temp, "c:/lcc/projects/disk4");
+	if (argc < 2) strcat(temp, "/home/aaron/workspace/345_2/disk4.txt");
 		else strcat(temp, argv[1]);
 	printf("\nMount Disk \"%s\"", temp);
 
@@ -592,7 +592,7 @@ int P6_fileSlots(int argc, char* argv[])	// list open file slots
 		if (fdEntry->name[0] == 0) continue;      // open slot
 		printf("\n %2d   ", fd);
 		for (i=0; i<12; i++) printf("%c", fdEntry->name[i]);
-		printf("  %02x%6ld%6d%6d%6d%6d%6d%6d%6ld",
+		printf("  %02x%6d%6d%6d%6d%6d%6d%6d%6d",
 			fdEntry->attributes,
 			fdEntry->fileSize,
 			fdEntry->startCluster,
@@ -641,7 +641,7 @@ void printDirectoryEntry(DirEntry* dirent)
 
    // Extract the date and format it as well, inserting it into the string...
    memcpy(&date, &(dirent->date), sizeof(FATDate));
-   sprintf(&p_string[31], "%02d/%02d/%04d %5d %5lu",
+   sprintf(&p_string[31], "%02d/%02d/%04d %5d %5u",
   				date.month+1, date.day, date.year+1980,
 			   dirent->startCluster, dirent->fileSize);
 
@@ -1391,6 +1391,8 @@ int P6_read(int argc, char* argv[])		// read file
 
 	if (argc < 2) nBytes = 1;
 	else nBytes = INTEGER(argv[1]);
+//	if(nBytes > 512)
+//		nBytes = 512;
 	nBytes %= 512;
 
 	if ((error = fmsReadFile(lastFD, buffer, nBytes)) < 0)
@@ -1808,7 +1810,7 @@ int fmsMount(char* fileName, void* ramDisk)
 // This function loads a RAM disk image from a file.
 //	The parameter fileName is the file path name of the disk image.
 //	The parameter ramDisk is a pointer to a character array whose
-//    size is equal to a 1.4 mb floppy disk (2849 ´ 512 bytes).
+//    size is equal to a 1.4 mb floppy disk (2849 ï¿½ 512 bytes).
 //	Return 0 for success, otherwise, return the error number
 {
    FILE* fp;
@@ -1837,7 +1839,7 @@ int fmsUnMount(char* fileName, void* ramDisk)
 // This function unloads your Project 5 RAM disk image to file computer file.
 // The parameter fileName is the file path name of the disk image.
 // The pointer parameter ramDisk points to a character array whose size is equal to a 1.4
-// mb floppy disk (2849 ´ 512 bytes).
+// mb floppy disk (2849 ï¿½ 512 bytes).
 // Return 0 for success; otherwise, return the error number.
 {
 	diskMounted = 0;							// unmount disk
@@ -1892,6 +1894,7 @@ void setFatEntry(int FATindex, unsigned short FAT12ClusEntryVal, unsigned char* 
 	{	FAT12ClusEntryVal <<= 4; 				// move 12-bits high
 		FATData &= 0x000F;						// mask complement
 	}
+
 	// Update FAT entry value in the FAT table
 	FATData = BigEndian(FATData);
 	*((unsigned short *)&FAT[FATOffset]) = FATData | FAT12ClusEntryVal;
